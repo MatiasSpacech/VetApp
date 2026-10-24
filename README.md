@@ -2,28 +2,32 @@
 
 App Android de gestión veterinaria, local-first con Room y sincronización a Supabase.
 
-## Estado actual: etapa 1 (base)
+## Estado actual: etapa 2 (clientes y mascotas)
 
 Incluye:
 
 - Proyecto Android con Kotlin, Compose, Material 3 y tema lila.
-- Room local con mascotas, outbox de sincronización y auditoría en la versión 2 del esquema.
-- Migración automática de la base local de la versión 1 a la 2.
+- Room local con clientes, mascotas, historial de propietario, outbox de sincronización y auditoría en la versión 3 del esquema.
+- Migraciones automáticas de la base local de la versión 1 a la 2 y de la 2 a la 3.
 - Login con Supabase Auth (email/contraseña).
 - `bootstrap_clinic` para crear la clínica y la membresía del usuario.
-- Push idempotente por RPC `apply_pet_operation` y pull de mascotas.
+- Push idempotente por RPC `apply_client_operation` y `apply_pet_operation`, con pull de clientes y mascotas.
 - Sincronización inmediata al guardar, con WorkManager y reintentos.
+- Clientes con ficha, teléfono, documento, email, dirección y notas; búsqueda y detección de duplicados por teléfono o documento.
+- Mascotas vinculadas a un cliente, con estado activa, inactiva o fallecida.
+- Cambio de propietario con historial, motivo y auditoría.
 - Alta de mascota con foto desde galería o cámara.
 - Compresión local a máximo 800x800 y 100 KB, en WebP o JPEG.
 - Subida de foto solo con conexión al bucket público `mascotas`.
-- Backup local cifrado manual (AES-256-GCM con frase) de la base, el outbox y la auditoría; no incluye fotos.
+- Backup local cifrado manual (AES-256-GCM con frase) de la base, el outbox, clientes, historial y auditoría; no incluye fotos.
 - Recordatorio de backup semanal en la pantalla principal.
 - Bloqueo de la app con PIN de 4 a 8 dígitos y biometría opcional.
 - Auditoría local de eventos críticos, visible desde Ajustes y restaurable desde un backup.
 - Pantalla de Ajustes con seguridad, backup y auditoría.
+- Pestañas Inicio, Clientes y Mascotas, con indicadores básicos de clientes y mascotas por estado.
 - Modo local sin Supabase para probar la UI y Room.
 
-Todavía no incluye: historias clínicas, vacunaciones, turnos, ventas, caja, dashboard, multiusuario ni resolución de conflictos de sincronización.
+Todavía no incluye: historias clínicas, vacunaciones, turnos, catálogo, ventas, caja, reportes avanzados, multiusuario ni resolución de conflictos de sincronización.
 
 ## Requisitos
 
@@ -35,10 +39,9 @@ Todavía no incluye: historias clínicas, vacunaciones, turnos, ventas, caja, da
 ## Configurar Supabase
 
 1. Crear un proyecto en la región **South America (São Paulo)**.
-2. Abrir el SQL Editor y ejecutar `supabase/migrations/202610230001_stage0.sql`.
-   - Crea `clinics`, `clinic_members`, `pets`, `sync_operations`, `audit_log`.
-   - Crea `bootstrap_clinic` y `apply_pet_operation`.
-   - Crea el bucket público `mascotas` y sus políticas.
+2. Abrir el SQL Editor y ejecutar, en orden, las migraciones:
+   - `supabase/migrations/202610230001_stage0.sql`: crea `clinics`, `clinic_members`, `pets`, `sync_operations` y `audit_log`; crea `bootstrap_clinic` y `apply_pet_operation`; crea el bucket público `mascotas` y sus políticas.
+   - `supabase/migrations/202610240001_stage2.sql`: crea `clients`, agrega `client_id` y `status` a `pets`, crea `apply_client_operation` y actualiza `apply_pet_operation`.
 3. En **Authentication > Users**, crear el usuario de la veterinaria con email y contraseña.
 4. Copiar la URL del proyecto y la **publishable/anon key** desde **Project Settings > API**.
 5. Completar `local.properties`:
@@ -67,10 +70,19 @@ Sin `SUPABASE_URL` y `SUPABASE_ANON_KEY`, la app arranca en **modo local**: Room
 
 1. Primer inicio de sesión online.
 2. `bootstrap_clinic` devuelve la clínica del usuario.
-3. Al guardar una mascota, se escriben la fila, su outbox y el evento de auditoría en la misma transacción de Room.
-4. Se intenta el push inmediato; si no hay red, WorkManager lo reintenta al reconectar.
-5. El pull trae las mascotas de la clínica al abrir, al reconectar y manualmente.
+3. Al guardar un cliente o una mascota, se escriben la fila, su outbox y el evento de auditoría en la misma transacción de Room.
+4. Se intenta el push inmediato; los clientes se envían antes que las mascotas para respetar el vínculo. Si no hay red, WorkManager lo reintenta al reconectar.
+5. El pull trae clientes y mascotas de la clínica al abrir, al reconectar y manualmente.
 6. La foto se comprime antes de subir y solo se permite con conexión. Se guarda únicamente la URL pública en `foto_url`.
+
+## Clientes y mascotas
+
+- **Clientes**: alta y edición con nombre, teléfono, documento, email, dirección y notas. La búsqueda filtra por nombre, teléfono, documento o email.
+- **Duplicados**: al guardar un cliente se comparan teléfono y documento normalizados. Si hay coincidencias, la app las muestra y permite revisar o guardar de todos modos.
+- **Archivar clientes**: un cliente con mascotas registradas no se puede archivar; primero hay que cambiar el propietario de sus mascotas.
+- **Mascotas**: al crear una mascota se elige un cliente existente. El estado puede ser activa, inactiva o fallecida, y se filtra desde la pestaña Mascotas.
+- **Cambio de propietario**: se hace desde la ficha de la mascota. Queda registrado en el historial con fecha, propietario anterior, propietario nuevo y motivo opcional.
+- **Inicio**: muestra clientes activos, mascotas activas, inactivas y fallecidas, además del estado de sincronización y el recordatorio de backup.
 
 ## Bloqueo de la app
 
@@ -89,7 +101,9 @@ Si se olvida el PIN no hay recuperación dentro de la app: hay que borrar los da
 
 Se registran eventos críticos en la tabla `audit_log` del dispositivo:
 
-- Alta, edición y baja de mascotas, con nombre, dueño y campos modificados.
+- Alta, edición y baja de clientes.
+- Alta, edición, cambio de estado y baja de mascotas.
+- Cambios de propietario, con propietario anterior y nuevo.
 - Exportación y restauración de backups.
 - Configuración, cambio y baja del PIN.
 - Activación y desactivación de la biometría.
@@ -105,7 +119,7 @@ En **Ajustes > Backup**:
 3. **Restaurar** pide la misma frase y reemplaza los datos locales con el contenido del backup.
 4. La app muestra un recordatorio si pasaron más de 7 días desde el último backup.
 
-El backup incluye mascotas, outbox y auditoría, no fotos. La frase no se guarda en el dispositivo: si se pierde, el backup no se puede recuperar. El archivo se verifica con cabecera `VBK1` y cifrado AES-256-GCM; una frase incorrecta falla sin exponer datos.
+El backup incluye clientes, mascotas, historial de propietario, outbox y auditoría, no fotos. La frase no se guarda en el dispositivo: si se pierde, el backup no se puede recuperar. El archivo se verifica con cabecera `VBK1` y cifrado AES-256-GCM; una frase incorrecta falla sin exponer datos.
 
 Restaurar exige iniciar sesión con la misma cuenta y clínica: el backup se rechaza si pertenece a otra clínica. No restaura el PIN ni la configuración del dispositivo. En un equipo nuevo, primero hay que iniciar sesión y después restaurar.
 
@@ -121,6 +135,8 @@ Restaurar exige iniciar sesión con la misma cuenta y clínica: el backup se rec
 La app está pensada para usarse principalmente en un Galaxy S24 FE (Android 14 o superior, One UI). Antes de usarla con datos reales, probar en el equipo:
 
 - Iniciar sesión con el usuario real y verificar `bootstrap_clinic`.
+- Crear clientes con teléfono y documento, y comprobar la detección de duplicados.
+- Crear mascotas vinculadas, cambiar su estado y cambiar de propietario verificando el historial.
 - Alta de mascota con foto desde **Galería** y desde **Cámara**.
 - Confirmar que la foto sube solo con conexión y que `foto_url` llega a Supabase.
 - Crear un PIN, habilitar biometría, bloquear la app y desbloquear con huella y con PIN.
@@ -146,13 +162,15 @@ adb install -r app\build\outputs\apk\debug\app-debug.apk
 .\gradlew.bat lintDebug
 ```
 
-Las pruebas unitarias cubren el hash y la política de PIN, el cálculo de dimensiones y la compresión de fotos, el mapeo de timestamps, los mensajes de error y el cifrado del backup. Las pruebas instrumentadas cubren:
+Las pruebas unitarias cubren el hash y la política de PIN, la normalización de teléfonos y documentos, la detección de duplicados, los estados de mascota, el mapeo de DTOs, el cálculo de dimensiones y la compresión de fotos, los mensajes de error y el cifrado del backup. Las pruebas instrumentadas cubren:
 
-- Backup cifrado de ida y vuelta con mascotas, outbox y auditoría.
-- Migración de Room de la versión 1 a la 2.
+- CRUD de clientes, duplicados por teléfono o documento y bloqueo de archivado con mascotas.
+- Creación de mascotas vinculadas, cambio de estado y cambio de propietario con historial.
+- Backup cifrado de ida y vuelta con clientes, mascotas, historial, outbox y auditoría.
+- Migraciones de Room de la versión 1 a la 2 y de la 2 a la 3.
 - Creación, verificación, bloqueo, cambio y baja del PIN; límite de intentos y bloqueo por segundo plano.
 - Pantalla de bloqueo: PIN correcto desbloquea y PIN incorrecto mantiene el contenido oculto.
 - Escritura transaccional de mascota + outbox + auditoría.
 - Compresión real a WebP/JPEG.
 
-La suite instrumentada se ejecutó en un emulador API 37 (12 pruebas). La validación en el S24 FE físico queda pendiente.
+La suite instrumentada se ejecutó en un emulador API 37 (14 pruebas). La validación en el S24 FE físico queda pendiente.

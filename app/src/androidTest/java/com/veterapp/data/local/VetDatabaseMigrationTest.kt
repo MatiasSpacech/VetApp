@@ -50,6 +50,37 @@ class VetDatabaseMigrationTest {
     }
   }
 
+  @Test
+  fun migratesFromVersion2To3() {
+    helper.createDatabase(DATABASE_NAME, 2).use { database ->
+      database.execSQL(
+        "INSERT INTO pets (" +
+          "id, clinicId, name, species, breed, ownerName, notes, fotoUrl, " +
+          "createdAt, updatedAt, revision, deletedAt, originDeviceId, pendingSync" +
+          ") VALUES (" +
+          "'pet-1', 'clinic-1', 'Luna', 'Perro', NULL, 'Ana', NULL, NULL, " +
+          "1, 1, 0, NULL, 'device-1', 0" +
+          ")",
+      )
+    }
+
+    helper.runMigrationsAndValidate(DATABASE_NAME, 3, true, VetDatabase.MIGRATION_2_3).use { database ->
+      database.query("SELECT status, clientId FROM pets").use { cursor ->
+        assertTrue(cursor.moveToFirst())
+        assertEquals("active", cursor.getString(0))
+        assertTrue(cursor.isNull(1))
+      }
+      database.query("SELECT COUNT(*) FROM clients").use { cursor ->
+        assertTrue(cursor.moveToFirst())
+        assertEquals(0, cursor.getInt(0))
+      }
+      database.query("SELECT COUNT(*) FROM pet_owner_history").use { cursor ->
+        assertTrue(cursor.moveToFirst())
+        assertEquals(0, cursor.getInt(0))
+      }
+    }
+  }
+
   private companion object {
     const val DATABASE_NAME = "migration-test.db"
   }

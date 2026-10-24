@@ -2,9 +2,11 @@ package com.veterapp.sync
 
 import com.veterapp.data.AppSettings
 import com.veterapp.data.AuthRepository
+import com.veterapp.data.ClientRepository
 import com.veterapp.data.PetRepository
 import com.veterapp.data.local.OutboxEntity
 import com.veterapp.data.local.VetDatabase
+import com.veterapp.data.remote.ClientDto
 import com.veterapp.data.remote.PetDto
 import com.veterapp.data.remote.SupabaseClientProvider
 import com.veterapp.util.isNetworkFailure
@@ -25,6 +27,7 @@ class SyncRepository(
   private val clientProvider: SupabaseClientProvider,
   private val authRepository: AuthRepository,
   private val petRepository: PetRepository,
+  private val clientRepository: ClientRepository,
 ) {
   private val outboxDao = database.outboxDao()
   private val json = Json { ignoreUnknownKeys = true }
@@ -43,6 +46,7 @@ class SyncRepository(
     return try {
       val clinicId = authRepository.ensureClinicId()
       pushPending(clinicId)
+      pullClients(clinicId)
       pullPets(clinicId)
       val now = System.currentTimeMillis()
       settings.lastSyncAt = now
@@ -60,7 +64,11 @@ class SyncRepository(
     val items = outboxDao.due(System.currentTimeMillis(), limit = 50)
     for (item in items) {
       try {
-        applyPetOperation(item, clinicId)
+        when (item.entityType) {
+          "client" -> applyClientOperation(item, clinicId)
+          "pet" -> applyPetOperation(item, clinicId)
+          else -> error("Entidad de sincronización desconocida: ${item.entityType}")
+        }
         outboxDao.delete(item.operationId)
       } catch (error: Throwable) {
         val attempts = item.attempts + 1
@@ -94,6 +102,37 @@ class SyncRepository(
         .decodeList<PetDto>()
     val saved = rows.firstOrNull() ?: error("El servidor no devolvió la mascota")
     petRepository.markSynced(saved, clinicId)
+  }
+
+  private suspend fun applyClientOperation(item: OutboxEntity, clinicId: String) {
+    val client = clientProvider.client ?: error("Supabase no está configurado")
+    val clientPayload = json.parseToJsonElement(item.payload).jsonObject
+    val parameters =
+      buildJsonObject {
+        put("p_operation_id", item.operationId)
+        put("p_clinic_id", clinicId)
+        put("p_device_id", settings.deviceId)
+        put("p_client", clientPayload)
+      }
+
+    val rows =
+      client.postgrest
+        .rpc("apply_client_operation", parameters)
+        .decodeList<ClientDto>()
+    val saved = rows.firstOrNull() ?: error("El servidor no devolvió el cliente")
+    clientRepository.markSynced(saved, clinicId)
+  }
+
+  private suspend fun pullClients(clinicId: String) {
+    val client = clientProvider.client ?: error("Supabase no está configurado")
+    val rows =
+      client.postgrest
+        .from("clients")
+        .select {
+          filter { eq("clinic_id", clinicId) }
+        }
+        .decodeList<ClientDto>()
+    rows.forEach { clientRepository.upsertFromRemote(it, clinicId) }
   }
 
   private suspend fun pullPets(clinicId: String) {

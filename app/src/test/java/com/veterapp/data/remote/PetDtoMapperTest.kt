@@ -16,6 +16,8 @@ class PetDtoMapperTest {
         species = "Perro",
         breed = "Mestiza",
         ownerName = "Ana",
+        clientId = "client-1",
+        status = "inactive",
         fotoUrl = "https://example.com/luna.webp",
         createdAt = "2026-10-23T12:00:00Z",
         updatedAt = "2026-10-23T12:30:00Z",
@@ -30,6 +32,8 @@ class PetDtoMapperTest {
     assertEquals("Luna", entity.name)
     assertEquals("Mestiza", entity.breed)
     assertEquals("Ana", entity.ownerName)
+    assertEquals("client-1", entity.clientId)
+    assertEquals("inactive", entity.status)
     assertEquals("https://example.com/luna.webp", entity.fotoUrl)
     assertEquals(Instant.parse("2026-10-23T12:00:00Z").toEpochMilli(), entity.createdAt)
     assertEquals(Instant.parse("2026-10-23T12:30:00Z").toEpochMilli(), entity.updatedAt)
@@ -54,5 +58,7 @@ class PetDtoMapperTest {
     assertEquals("local-clinic", entity.clinicId)
     assertEquals("device-2", entity.originDeviceId)
     assertEquals(1L, entity.revision)
+    assertNull(entity.clientId)
+    assertEquals("active", entity.status)
   }
 }

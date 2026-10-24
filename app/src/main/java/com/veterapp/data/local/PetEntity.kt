@@ -1,5 +1,6 @@
 package com.veterapp.data.local
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -8,7 +9,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 @Entity(
   tableName = "pets",
-  indices = [Index("clinicId"), Index("updatedAt"), Index("pendingSync")],
+  indices = [Index("clinicId"), Index("clientId"), Index("updatedAt"), Index("pendingSync")],
 )
 data class PetEntity(
   @PrimaryKey val id: String,
@@ -25,4 +26,10 @@ data class PetEntity(
   val deletedAt: Long?,
   val originDeviceId: String,
   val pendingSync: Boolean,
-)
+  val clientId: String? = null,
+  @ColumnInfo(defaultValue = "active") val status: String = "active",
+) {
+  companion object {
+    const val DEFAULT_STATUS = "active"
+  }
+}

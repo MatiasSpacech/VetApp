@@ -36,6 +36,9 @@ class AppSettings(context: Context) {
           preferences.edit().putString(KEY_LOCAL_CLINIC_ID, it).apply()
         }
 
+  val currentClinicId: String
+    get() = clinicId ?: localClinicId
+
   var lastSyncAt: Long
     get() = preferences.getLong(KEY_LAST_SYNC_AT, 0L)
     set(value) {

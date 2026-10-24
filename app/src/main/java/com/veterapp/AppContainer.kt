@@ -5,6 +5,7 @@ import com.veterapp.backup.BackupRepository
 import com.veterapp.data.AppSettings
 import com.veterapp.data.AuditRepository
 import com.veterapp.data.AuthRepository
+import com.veterapp.data.ClientRepository
 import com.veterapp.data.NetworkMonitor
 import com.veterapp.data.PetRepository
 import com.veterapp.data.local.VetDatabase
@@ -22,6 +23,7 @@ class AppContainer(context: Context) {
   val clientProvider = SupabaseClientProvider()
   val authRepository = AuthRepository(clientProvider, settings)
   val auditRepository = AuditRepository(database, settings)
+  val clientRepository = ClientRepository(database, settings, auditRepository)
   val petRepository = PetRepository(database, settings, auditRepository)
   val photoCompressor = PhotoCompressor(context)
   val photoRepository = PhotoRepository(clientProvider)
@@ -42,5 +44,6 @@ class AppContainer(context: Context) {
       clientProvider = clientProvider,
       authRepository = authRepository,
       petRepository = petRepository,
+      clientRepository = clientRepository,
     )
 }

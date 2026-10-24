@@ -7,8 +7,11 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.veterapp.data.AppSettings
 import com.veterapp.data.AuditRepository
+import com.veterapp.data.ClientRepository
 import com.veterapp.data.PetRepository
 import com.veterapp.data.local.VetDatabase
+import com.veterapp.domain.ClientDraft
+import com.veterapp.domain.ClientSaveResult
 import com.veterapp.domain.PetDraft
 import java.io.File
 import java.util.UUID
@@ -30,26 +33,54 @@ class BackupRepositoryTest {
       settings.clinicId = "local-clinic"
       settings.userId = null
       val audit = AuditRepository(database, settings)
+      val clients = ClientRepository(database, settings, audit)
       val pets = PetRepository(database, settings, audit)
       val backup = BackupRepository(context, database, settings, audit)
       val file = File(context.cacheDir, "backup-test.vbackup")
       val passphrase = "backup123"
 
+      val ana =
+        (clients.create(
+          ClientDraft(
+            name = "Ana",
+            phone = "11 5555-1234",
+            document = "30.111.222",
+            email = null,
+            address = null,
+            notes = null,
+          ),
+        ) as ClientSaveResult.Success).client
+      val leo =
+        (clients.create(
+          ClientDraft(
+            name = "Leo",
+            phone = null,
+            document = null,
+            email = null,
+            address = null,
+            notes = null,
+          ),
+        ) as ClientSaveResult.Success).client
+      val petId = UUID.randomUUID().toString()
       pets.createPet(
-        clinicId = "local-clinic",
-        petId = UUID.randomUUID().toString(),
+        clientId = ana.id,
+        petId = petId,
         draft =
           PetDraft(
             name = "Luna",
             species = "Perro",
             breed = "Mestiza",
-            ownerName = "Ana",
             notes = null,
           ),
         fotoUrl = null,
       )
+      pets.changeOwner(petId, leo.id, "Cambio de familia")
 
-      assertEquals(1, database.auditDao().all().count { it.action == "pet.create" })
+      assertEquals(2, clients.clients.first().size)
+      assertEquals(1, pets.pets.first().size)
+      assertEquals(1, pets.observeOwnerHistory(petId).first().size)
+      assertTrue(database.auditDao().all().any { it.action == "pet.create" })
+      assertTrue(database.auditDao().all().any { it.action == "client.create" })
 
       val exported = backup.export(passphrase.toCharArray(), Uri.fromFile(file))
       assertTrue(exported.isSuccess)
@@ -60,15 +91,21 @@ class BackupRepositoryTest {
       database.petDao().clear()
       database.outboxDao().clear()
       database.auditDao().clear()
+      database.clientDao().clear()
+      database.ownerHistoryDao().clear()
       assertEquals(0, pets.pets.first().size)
+      assertEquals(0, clients.clients.first().size)
 
       val restored = backup.restore(passphrase.toCharArray(), Uri.fromFile(file))
       assertTrue(restored.isSuccess)
       assertEquals(1, restored.getOrThrow())
       assertEquals(1, pets.pets.first().size)
       assertEquals("Luna", pets.pets.first().first().name)
-      assertEquals(1, database.outboxDao().observeCount().first())
+      assertEquals(2, clients.clients.first().size)
+      assertEquals(1, pets.observeOwnerHistory(petId).first().size)
+      assertEquals(4, database.outboxDao().observeCount().first())
       assertTrue(database.auditDao().all().any { it.action == "pet.create" })
+      assertTrue(database.auditDao().all().any { it.action == "client.create" })
       assertTrue(database.auditDao().all().any { it.action == "backup.restore" })
 
       database.close()

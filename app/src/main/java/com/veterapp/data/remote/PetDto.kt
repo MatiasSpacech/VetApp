@@ -13,6 +13,8 @@ data class PetDto(
   val species: String,
   val breed: String? = null,
   @SerialName("owner_name") val ownerName: String,
+  @SerialName("client_id") val clientId: String? = null,
+  val status: String? = null,
   val notes: String? = null,
   @SerialName("foto_url") val fotoUrl: String? = null,
   @SerialName("created_at") val createdAt: String? = null,
@@ -35,6 +37,8 @@ fun PetEntity.toDto(): PetDto =
     species = species,
     breed = breed,
     ownerName = ownerName,
+    clientId = clientId,
+    status = status,
     notes = notes,
     fotoUrl = fotoUrl,
     createdAt = Instant.ofEpochMilli(createdAt).toString(),
@@ -52,6 +56,8 @@ fun PetDto.toEntity(fallbackClinicId: String, fallbackDeviceId: String): PetEnti
     species = species,
     breed = breed,
     ownerName = ownerName,
+    clientId = clientId,
+    status = status ?: PetEntity.DEFAULT_STATUS,
     notes = notes,
     fotoUrl = fotoUrl,
     createdAt = createdAt.toEpochMillisOrNow(),
@@ -62,9 +68,9 @@ fun PetDto.toEntity(fallbackClinicId: String, fallbackDeviceId: String): PetEnti
     pendingSync = false,
   )
 
-private fun String?.toEpochMillisOrNow(): Long = toEpochMillisOrNull() ?: System.currentTimeMillis()
+internal fun String?.toEpochMillisOrNow(): Long = toEpochMillisOrNull() ?: System.currentTimeMillis()
 
-private fun String?.toEpochMillisOrNull(): Long? =
+internal fun String?.toEpochMillisOrNull(): Long? =
   this?.let { value ->
     runCatching { Instant.parse(value).toEpochMilli() }.getOrNull()
   }

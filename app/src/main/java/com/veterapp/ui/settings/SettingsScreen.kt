@@ -52,13 +52,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.veterapp.VeterAppApplication
 import com.veterapp.domain.AuditEvent
+import com.veterapp.domain.PetStatus
 import com.veterapp.security.BiometricUnlock
 import com.veterapp.security.PinPolicy
 import com.veterapp.security.findFragmentActivity
+import com.veterapp.ui.common.formatDateTime
 import com.veterapp.util.userMessage
-import java.time.Instant
 import java.time.LocalDateTime
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -323,12 +323,12 @@ private fun BackupCard(
         fontWeight = FontWeight.SemiBold,
       )
       Text(
-        "Incluye la base, la auditoría y los cambios pendientes. No incluye las fotos. La frase no se guarda: anotala.",
+        "Incluye clientes, mascotas, historial de propietario, auditoría y cambios pendientes. No incluye las fotos. La frase no se guarda: anotala.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
       Text(
-        "Último backup: ${formatTimestamp(lastBackupAt)}",
+        "Último backup: ${formatDateTime(lastBackupAt)}",
         style = MaterialTheme.typography.bodySmall,
       )
       OutlinedTextField(
@@ -577,7 +577,7 @@ private fun AuditRow(event: AuditEvent) {
         style = MaterialTheme.typography.bodySmall,
       )
       Text(
-        formatTimestamp(event.createdAt),
+        formatDateTime(event.createdAt),
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
@@ -589,7 +589,12 @@ private fun auditActionLabel(action: String): String =
   when (action) {
     "pet.create" -> "Mascota creada"
     "pet.update" -> "Mascota editada"
-    "pet.delete" -> "Mascota dada de baja"
+    "pet.status" -> "Estado de mascota cambiado"
+    "pet.owner.change" -> "Cambio de propietario"
+    "pet.delete" -> "Mascota archivada"
+    "client.create" -> "Cliente creado"
+    "client.update" -> "Cliente editado"
+    "client.delete" -> "Cliente archivado"
     "backup.export" -> "Backup exportado"
     "backup.restore" -> "Backup restaurado"
     "security.pin.create" -> "PIN configurado"
@@ -608,9 +613,31 @@ private fun auditDetail(event: AuditEvent): String =
       val changed = payloadText(event, "changed").orEmpty()
       if (changed.isBlank()) "Ficha de $name editada." else "Ficha de $name editada. Cambios: $changed."
     }
-    "pet.delete" -> "Ficha de ${payloadText(event, "name") ?: "mascota"} dada de baja."
-    "backup.export" -> "Mascotas incluidas: ${payloadInt(event, "pets") ?: 0}."
-    "backup.restore" -> "Mascotas restauradas: ${payloadInt(event, "pets") ?: 0}."
+    "pet.status" -> {
+      val name = payloadText(event, "name") ?: "mascota"
+      val from = PetStatus.fromStorage(payloadText(event, "from")).label
+      val to = PetStatus.fromStorage(payloadText(event, "to")).label
+      "Estado de $name: $from → $to."
+    }
+    "pet.owner.change" -> {
+      val name = payloadText(event, "name") ?: "mascota"
+      val previous = payloadText(event, "previous_owner") ?: "sin propietario"
+      val current = payloadText(event, "new_owner") ?: "sin propietario"
+      val reason = payloadText(event, "reason")
+      "Mascota $name: de $previous a $current.${reason?.let { " Motivo: $it." }.orEmpty()}"
+    }
+    "pet.delete" -> "Ficha de ${payloadText(event, "name") ?: "mascota"} archivada."
+    "client.create" -> "Cliente ${payloadText(event, "name") ?: "sin nombre"} creado."
+    "client.update" -> {
+      val name = payloadText(event, "name") ?: "cliente"
+      val changed = payloadText(event, "changed").orEmpty()
+      if (changed.isBlank()) "Cliente $name editado." else "Cliente $name editado. Cambios: $changed."
+    }
+    "client.delete" -> "Cliente ${payloadText(event, "name") ?: "sin nombre"} archivado."
+    "backup.export" ->
+      "Clientes: ${payloadInt(event, "clients") ?: 0} · Mascotas: ${payloadInt(event, "pets") ?: 0}."
+    "backup.restore" ->
+      "Clientes: ${payloadInt(event, "clients") ?: 0} · Mascotas: ${payloadInt(event, "pets") ?: 0}."
     "security.pin.create" -> "Se configuró el bloqueo con PIN."
     "security.pin.change" -> "Se cambió el PIN de desbloqueo."
     "security.pin.remove" -> "Se desactivó el bloqueo de la app."
@@ -631,10 +658,3 @@ private fun payloadText(event: AuditEvent, key: String): String? =
 
 private fun payloadInt(event: AuditEvent, key: String): Int? =
   payloadObject(event)?.get(key)?.jsonPrimitive?.intOrNull
-
-private fun formatTimestamp(timestamp: Long): String {
-  if (timestamp <= 0L) return "nunca"
-  return Instant.ofEpochMilli(timestamp)
-    .atZone(ZoneId.systemDefault())
-    .format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
-}

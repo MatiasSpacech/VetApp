@@ -10,7 +10,9 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface OutboxDao {
   @Query(
-    "SELECT * FROM sync_outbox WHERE nextAttemptAt <= :now ORDER BY createdAt ASC LIMIT :limit",
+    "SELECT * FROM sync_outbox WHERE nextAttemptAt <= :now " +
+      "ORDER BY CASE entityType WHEN 'client' THEN 0 WHEN 'pet' THEN 1 ELSE 2 END, " +
+      "createdAt ASC LIMIT :limit",
   )
   suspend fun due(now: Long, limit: Int): List<OutboxEntity>
 

@@ -37,7 +37,9 @@ class BackupRepository(
             BackupSnapshot(
               exportedAt = System.currentTimeMillis(),
               appVersion = BuildConfig.VERSION_NAME,
+              clients = database.clientDao().all(),
               pets = database.petDao().all(),
+              ownerHistory = database.ownerHistoryDao().all(),
               outbox = database.outboxDao().all(),
               audit = database.auditDao().all(),
             )
@@ -57,7 +59,9 @@ class BackupRepository(
             action = "backup.export",
             payload =
               buildJsonObject {
+                put("clients", snapshot.clients.size)
                 put("pets", snapshot.pets.size)
+                put("owner_history", snapshot.ownerHistory.size)
                 put("outbox", snapshot.outbox.size)
                 put("audit", snapshot.audit.size)
               },
@@ -88,7 +92,13 @@ class BackupRepository(
           "Versión de backup no soportada"
         }
         val expectedClinic = settings.clinicId ?: settings.localClinicId
+        require(snapshot.clients.all { it.clinicId == expectedClinic }) {
+          "El backup pertenece a otra clínica"
+        }
         require(snapshot.pets.all { it.clinicId == expectedClinic }) {
+          "El backup pertenece a otra clínica"
+        }
+        require(snapshot.ownerHistory.all { it.clinicId == expectedClinic }) {
           "El backup pertenece a otra clínica"
         }
         require(snapshot.audit.all { it.clinicId == expectedClinic }) {
@@ -99,7 +109,11 @@ class BackupRepository(
           database.petDao().clear()
           database.outboxDao().clear()
           database.auditDao().clear()
+          database.clientDao().clear()
+          database.ownerHistoryDao().clear()
+          database.clientDao().insertAll(snapshot.clients)
           database.petDao().insertAll(snapshot.pets)
+          database.ownerHistoryDao().insertAll(snapshot.ownerHistory)
           database.outboxDao().insertAll(snapshot.outbox)
           database.auditDao().insertAll(snapshot.audit)
           auditRepository.record(
@@ -108,7 +122,9 @@ class BackupRepository(
             action = "backup.restore",
             payload =
               buildJsonObject {
+                put("clients", snapshot.clients.size)
                 put("pets", snapshot.pets.size)
+                put("owner_history", snapshot.ownerHistory.size)
                 put("outbox", snapshot.outbox.size)
                 put("audit", snapshot.audit.size)
               },
