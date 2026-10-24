@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
@@ -34,15 +35,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.veterapp.domain.Client
+import com.veterapp.domain.ClinicTime
 import com.veterapp.domain.Pet
 import com.veterapp.domain.PetDraft
+import com.veterapp.domain.PetSex
 import com.veterapp.domain.PetStatus
+import com.veterapp.domain.ReproductiveStatus
 import com.veterapp.photo.CameraFiles
 import com.veterapp.photo.CompressedPhoto
 import com.veterapp.ui.clients.ClientPickerDialog
+import com.veterapp.ui.common.AppFormSheet
+import com.veterapp.ui.common.DateField
 import com.veterapp.util.userMessage
 
 @Composable
@@ -78,6 +85,19 @@ fun PetFormDialog(
   var statusStorage by rememberSaveable(pet?.id, initialClientId) {
     mutableStateOf(pet?.status?.storage ?: PetStatus.Active.storage)
   }
+  var sexStorage by rememberSaveable(pet?.id) { mutableStateOf(pet?.sex?.storage ?: PetSex.Unknown.storage) }
+  var reproductiveStorage by rememberSaveable(pet?.id) {
+    mutableStateOf(pet?.reproductiveStatus?.storage ?: ReproductiveStatus.Unknown.storage)
+  }
+  var birthDate by rememberSaveable(pet?.id) { mutableStateOf(pet?.birthDate) }
+  var approxAge by rememberSaveable(pet?.id) {
+    mutableStateOf(pet?.approxAgeMonths?.toString().orEmpty())
+  }
+  var color by rememberSaveable(pet?.id) { mutableStateOf(pet?.color.orEmpty()) }
+  var markings by rememberSaveable(pet?.id) { mutableStateOf(pet?.markings.orEmpty()) }
+  var microchip by rememberSaveable(pet?.id) { mutableStateOf(pet?.microchip.orEmpty()) }
+  var allergies by rememberSaveable(pet?.id) { mutableStateOf(pet?.allergies.orEmpty()) }
+  var medicalNotes by rememberSaveable(pet?.id) { mutableStateOf(pet?.medicalNotes.orEmpty()) }
   var selectedClientId by rememberSaveable(pet?.id, initialClientId) {
     mutableStateOf(lockedClientId)
   }
@@ -130,8 +150,6 @@ fun PetFormDialog(
       error = "Elegí un cliente para la mascota"
       return
     }
-    isSaving = true
-    error = null
     val draft =
       PetDraft(
         name = name,
@@ -139,7 +157,22 @@ fun PetFormDialog(
         breed = breed,
         notes = notes,
         status = PetStatus.fromStorage(statusStorage),
+        sex = PetSex.fromStorage(sexStorage),
+        birthDate = birthDate,
+        approxAgeMonths = approxAge.toIntOrNull(),
+        color = color,
+        markings = markings,
+        microchip = microchip,
+        reproductiveStatus = ReproductiveStatus.fromStorage(reproductiveStorage),
+        allergies = allergies,
+        medicalNotes = medicalNotes,
       )
+    draft.validate()?.let {
+      error = it
+      return
+    }
+    isSaving = true
+    error = null
     onSave(selectedClientId, draft, compressedPhoto, removePhoto) { result ->
       isSaving = false
       result
@@ -148,15 +181,15 @@ fun PetFormDialog(
     }
   }
 
-  AlertDialog(
-    onDismissRequest = { if (!isSaving) onDismiss() },
-    title = { Text(if (pet == null) "Nueva mascota" else "Editar mascota") },
-    text = {
-      Column(
-        modifier = Modifier.verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-      ) {
-        OutlinedTextField(
+  AppFormSheet(
+    title = if (pet == null) "Nueva mascota" else "Editar mascota",
+    subtitle = "Completá la ficha clínica y el propietario.",
+    confirmLabel = if (pet == null) "Guardar mascota" else "Guardar cambios",
+    onConfirm = ::save,
+    onDismiss = onDismiss,
+    busy = isSaving,
+    confirmEnabled = !isCompressing,
+  ) {        OutlinedTextField(
           value = name,
           onValueChange = { name = it },
           label = { Text("Nombre *") },
@@ -175,6 +208,85 @@ fun PetFormDialog(
           onValueChange = { breed = it },
           label = { Text("Raza") },
           singleLine = true,
+          modifier = Modifier.fillMaxWidth(),
+        )
+
+        Text("Datos clínicos", style = MaterialTheme.typography.titleSmall)
+        Text("Sexo", style = MaterialTheme.typography.bodySmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          PetSex.entries.forEach { option ->
+            FilterChip(
+              selected = sexStorage == option.storage,
+              onClick = { sexStorage = option.storage },
+              label = { Text(option.label) },
+            )
+          }
+        }
+        Text("Estado reproductivo", style = MaterialTheme.typography.bodySmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          ReproductiveStatus.entries.forEach { option ->
+            FilterChip(
+              selected = reproductiveStorage == option.storage,
+              onClick = { reproductiveStorage = option.storage },
+              label = { Text(option.label) },
+            )
+          }
+        }
+        DateField(
+          label = "Fecha de nacimiento",
+          epochDay = birthDate,
+          onChange = { birthDate = it },
+          enabled = !isSaving,
+          maxEpochDay = ClinicTime.todayEpochDay(),
+        )
+        if (birthDate != null) {
+          TextButton(onClick = { birthDate = null }, enabled = !isSaving) {
+            Text("Borrar fecha")
+          }
+        }
+        OutlinedTextField(
+          value = approxAge,
+          onValueChange = { value -> approxAge = value.filter { it.isDigit() }.take(4) },
+          label = { Text("Edad aproximada en meses (si no hay fecha)") },
+          singleLine = true,
+          keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+          modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+          value = color,
+          onValueChange = { color = it },
+          label = { Text("Color") },
+          singleLine = true,
+          modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+          value = markings,
+          onValueChange = { markings = it },
+          label = { Text("Señas particulares") },
+          singleLine = true,
+          modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+          value = microchip,
+          onValueChange = { microchip = it },
+          label = { Text("Microchip") },
+          singleLine = true,
+          modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+          value = allergies,
+          onValueChange = { allergies = it },
+          label = { Text("Alergias") },
+          minLines = 1,
+          maxLines = 3,
+          modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+          value = medicalNotes,
+          onValueChange = { medicalNotes = it },
+          label = { Text("Antecedentes médicos") },
+          minLines = 2,
+          maxLines = 4,
           modifier = Modifier.fillMaxWidth(),
         )
 
@@ -321,20 +433,9 @@ fun PetFormDialog(
             Text("Guardando…", style = MaterialTheme.typography.bodySmall)
           }
         }
-      }
-    },
-    confirmButton = {
-      TextButton(
-        onClick = ::save,
-        enabled = !isSaving && !isCompressing,
-      ) {
-        Text(if (isSaving) "Guardando…" else if (pet == null) "Guardar" else "Guardar cambios")
-      }
-    },
-    dismissButton = {
-      TextButton(onClick = onDismiss, enabled = !isSaving) { Text("Cancelar") }
-    },
-  )
+
+  }
+
 
   if (showClientPicker) {
     ClientPickerDialog(

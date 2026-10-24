@@ -28,6 +28,15 @@ data class PetEntity(
   val pendingSync: Boolean,
   val clientId: String? = null,
   @ColumnInfo(defaultValue = "active") val status: String = "active",
+  val sex: String? = null,
+  val birthDate: Long? = null,
+  val approxAgeMonths: Int? = null,
+  val color: String? = null,
+  val markings: String? = null,
+  val microchip: String? = null,
+  val reproductiveStatus: String? = null,
+  val allergies: String? = null,
+  val medicalNotes: String? = null,
 ) {
   companion object {
     const val DEFAULT_STATUS = "active"

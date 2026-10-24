@@ -1,5 +1,18 @@
 package com.veterapp.ui.appointments
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import com.veterapp.ui.common.AppCard
+import com.veterapp.ui.common.AppIcons
+import com.veterapp.ui.common.FilterPill
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
@@ -161,15 +174,18 @@ fun AppointmentsTab(
         )
       }
       item {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+          modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
           CalendarMode.entries.forEach { option ->
-            FilterChip(
+            FilterPill(
+              label = option.label,
               selected = mode == option,
               onClick = {
                 modeName = option.name
                 anchorEpochDay = selectedEpochDay
               },
-              label = { Text(option.label) },
             )
           }
         }
@@ -319,104 +335,61 @@ private fun CalendarHeader(
   onToday: () -> Unit,
   onNewAppointment: () -> Unit,
 ) {
-  Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+  Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
     Row(verticalAlignment = Alignment.CenterVertically) {
       Text(
         title,
-        style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.SemiBold,
+        style = MaterialTheme.typography.headlineSmall,
+        fontWeight = FontWeight.Bold,
         modifier = Modifier.weight(1f),
       )
-      TextButton(onClick = onToday) { Text("Hoy") }
-      TextButton(onClick = onNewAppointment) { Text("Nuevo") }
+      TextButton(onClick = onToday) {
+        Icon(
+          painter = painterResource(AppIcons.CalendarToday),
+          contentDescription = null,
+          modifier = Modifier.size(17.dp),
+        )
+        Spacer(Modifier.width(4.dp))
+        Text("Hoy")
+      }
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
-      TextButton(onClick = onPrevious) { Text("‹") }
-      Text(
-        when (mode) {
-          CalendarMode.Month -> "Mes"
-          CalendarMode.Week -> "Semana"
-          CalendarMode.Day -> "Día"
-        },
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-      )
-      TextButton(onClick = onNext) { Text("›") }
-    }
-  }
-}
-
-@Composable
-private fun MonthGrid(
-  month: LocalDate,
-  selected: LocalDate,
-  today: LocalDate,
-  counts: Map<LocalDate, Int>,
-  onSelect: (LocalDate) -> Unit,
-) {
-  val first = month.withDayOfMonth(1)
-  val leading = first.dayOfWeek.value - 1
-  val totalCells = ((leading + first.lengthOfMonth() + 6) / 7) * 7
-  val days =
-    (0 until totalCells).map { index ->
-      val day = index - leading + 1
-      if (day in 1..first.lengthOfMonth()) first.plusDays((day - 1).toLong()) else null
-    }
-
-  Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-    Row(Modifier.fillMaxWidth()) {
-      listOf("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom").forEach { label ->
-        Text(
-          label,
-          modifier = Modifier.weight(1f),
-          style = MaterialTheme.typography.labelSmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
+      IconButton(onClick = onPrevious) {
+        Icon(
+          painter = painterResource(AppIcons.ChevronRight),
+          contentDescription = "Período anterior",
+          modifier = Modifier.size(22.dp).rotate(180f),
         )
       }
-    }
-    days.chunked(7).forEach { week ->
-      Row(Modifier.fillMaxWidth()) {
-        week.forEach { day ->
-          Box(modifier = Modifier.weight(1f).padding(2.dp)) {
-            if (day != null) {
-              val count = counts[day] ?: 0
-              Surface(
-                onClick = { onSelect(day) },
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-                color =
-                  when {
-                    day == selected -> MaterialTheme.colorScheme.primaryContainer
-                    day == today -> MaterialTheme.colorScheme.secondaryContainer
-                    else -> MaterialTheme.colorScheme.surfaceVariant
-                  },
-                modifier = Modifier.fillMaxWidth(),
-              ) {
-                Column(
-                  modifier = Modifier.padding(vertical = 6.dp),
-                  horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                  Text(
-                    day.dayOfMonth.toString(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = if (day == today) FontWeight.Bold else FontWeight.Normal,
-                  )
-                  if (count > 0) {
-                    Text(
-                      count.toString(),
-                      style = MaterialTheme.typography.labelSmall,
-                      color = MaterialTheme.colorScheme.primary,
-                    )
-                  }
-                }
-              }
-            }
-          }
-        }
+      Text(
+        when (mode) {
+          CalendarMode.Month -> "Vista mensual"
+          CalendarMode.Week -> "Vista semanal"
+          CalendarMode.Day -> "Vista diaria"
+        },
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+      IconButton(onClick = onNext) {
+        Icon(
+          painter = painterResource(AppIcons.ChevronRight),
+          contentDescription = "Período siguiente",
+          modifier = Modifier.size(22.dp),
+        )
+      }
+      Spacer(Modifier.weight(1f))
+      TextButton(onClick = onNewAppointment) {
+        Icon(
+          painter = painterResource(AppIcons.Add),
+          contentDescription = null,
+          modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(4.dp))
+        Text("Nuevo")
       }
     }
   }
 }
-
 @Composable
 private fun DaySectionHeader(date: LocalDate, count: Int) {
   Row(
@@ -439,6 +412,91 @@ private fun DaySectionHeader(date: LocalDate, count: Int) {
 }
 
 @Composable
+private fun MonthGrid(
+  month: LocalDate,
+  selected: LocalDate,
+  today: LocalDate,
+  counts: Map<LocalDate, Int>,
+  onSelect: (LocalDate) -> Unit,
+) {
+  val first = month.withDayOfMonth(1)
+  val leading = first.dayOfWeek.value - 1
+  val totalCells = ((leading + first.lengthOfMonth() + 6) / 7) * 7
+  val days =
+    (0 until totalCells).map { index ->
+      val day = index - leading + 1
+      if (day in 1..first.lengthOfMonth()) first.plusDays((day - 1).toLong()) else null
+    }
+
+  Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(Modifier.fillMaxWidth()) {
+      listOf("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom").forEach { label ->
+        Text(
+          label,
+          modifier = Modifier.weight(1f),
+          style = MaterialTheme.typography.labelSmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+      }
+    }
+    days.chunked(7).forEach { week ->
+      Row(Modifier.fillMaxWidth()) {
+        week.forEach { day ->
+          Box(modifier = Modifier.weight(1f).padding(2.dp)) {
+            if (day != null) {
+              val count = counts[day] ?: 0
+              Surface(
+                onClick = { onSelect(day) },
+                shape = RoundedCornerShape(14.dp),
+                color =
+                  when {
+                    day == selected -> MaterialTheme.colorScheme.primaryContainer
+                    day == today -> MaterialTheme.colorScheme.secondaryContainer
+                    else -> MaterialTheme.colorScheme.surfaceContainerLow
+                  },
+                border =
+                  if (day == today && day != selected) {
+                    androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.secondary)
+                  } else {
+                    null
+                  },
+                modifier = Modifier.fillMaxWidth(),
+              ) {
+                Column(
+                  modifier = Modifier.padding(vertical = 8.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                  Text(
+                    day.dayOfMonth.toString(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (day == today) FontWeight.Bold else FontWeight.Normal,
+                    color =
+                      if (day == selected) MaterialTheme.colorScheme.onPrimaryContainer
+                      else MaterialTheme.colorScheme.onSurface,
+                  )
+                  if (count > 0) {
+                    Spacer(Modifier.height(2.dp))
+                    Box(
+                      Modifier
+                        .size(5.dp)
+                        .background(
+                          if (day == selected) MaterialTheme.colorScheme.onPrimaryContainer
+                          else MaterialTheme.colorScheme.primary,
+                          androidx.compose.foundation.shape.CircleShape,
+                        ),
+                    )
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+@Composable
 private fun EmptyDay() {
   Text(
     "No hay turnos para este día.",
@@ -450,13 +508,8 @@ private fun EmptyDay() {
 
 @Composable
 private fun AppointmentCard(appointment: Appointment, onClick: (Appointment) -> Unit) {
-  Card(
-    onClick = { onClick(appointment) },
-    modifier = Modifier.fillMaxWidth(),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-  ) {
+  AppCard(onClick = { onClick(appointment) }, contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp)) {
     Row(
-      modifier = Modifier.padding(12.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
       Column(Modifier.weight(1f)) {

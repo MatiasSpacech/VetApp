@@ -148,7 +148,10 @@ class VaccinationRepository(
           daysUntilDue = dueOn - today.toEpochDay(),
         )
       }
-      .filter { it.daysUntilDue <= ALERT_WINDOW_DAYS }
+      .filter { alert ->
+        val overdueVisible = alert.daysUntilDue >= 0 || settings.reminderOverdue
+        overdueVisible && alert.daysUntilDue <= settings.reminderMonthDays
+      }
       .sortedWith(compareBy<VaccinationAlert>({ it.daysUntilDue }, { it.petName.lowercase() }))
 
   private suspend fun enqueueUpsert(
@@ -185,8 +188,4 @@ class VaccinationRepository(
   }
 
   private fun String?.clean(): String? = this?.trim()?.takeIf { it.isNotBlank() }
-
-  private companion object {
-    const val ALERT_WINDOW_DAYS = 30L
-  }
 }

@@ -1,5 +1,6 @@
 package com.veterapp.notifications
 
+import com.veterapp.data.AppSettings
 import com.veterapp.data.VaccinationRepository
 import com.veterapp.data.local.VaccinationNotificationDao
 import com.veterapp.data.local.VaccinationNotificationEntity
@@ -16,6 +17,7 @@ class ReminderService(
   private val vaccinationRepository: VaccinationRepository,
   private val notificationDao: VaccinationNotificationDao,
   private val notifications: ReminderNotifier,
+  private val settings: AppSettings,
 ) {
   private val mutex = Mutex()
 
@@ -34,7 +36,15 @@ class ReminderService(
           }
           .toSet()
 
-      val plans = planReminders(today, candidates, alreadyNotified)
+      val plans =
+        planReminders(
+          today = today,
+          candidates = candidates,
+          alreadyNotified = alreadyNotified,
+          monthDays = settings.reminderMonthDays,
+          weekDays = settings.reminderWeekDays,
+          includeOverdue = settings.reminderOverdue,
+        )
       var sent = 0
       plans.forEach { plan ->
         if (notifications.show(plan)) {

@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.veterapp.ui.common.AppFormSheet
 import com.veterapp.domain.ConsultationAddendumDraft
 import com.veterapp.ui.common.formatConsultationDate
 import com.veterapp.util.userMessage
@@ -53,12 +54,15 @@ fun AddendumDialog(
     }
   }
 
-  AlertDialog(
-    onDismissRequest = { if (!busy) onDismiss() },
-    title = { Text("Agregar addendum") },
-    text = {
-      Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
+  AppFormSheet(
+    title = "Agregar addendum",
+    subtitle = "La consulta original no se modifica.",
+    confirmLabel = "Guardar addendum",
+    onConfirm = ::save,
+    onDismiss = onDismiss,
+    busy = busy,
+    dirty = false,
+  ) {        Text(
           "Corrección de la consulta del ${formatConsultationDate(consultationDate)}. La consulta original no se modifica.",
           style = MaterialTheme.typography.bodySmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -88,15 +92,7 @@ fun AddendumDialog(
             Text("Guardando…", style = MaterialTheme.typography.bodySmall)
           }
         }
-      }
-    },
-    confirmButton = {
-      TextButton(onClick = ::save, enabled = !busy) {
-        Text(if (busy) "Guardando…" else "Guardar")
-      }
-    },
-    dismissButton = {
-      TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancelar") }
-    },
-  )
+
+  }
+
 }

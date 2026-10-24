@@ -81,6 +81,36 @@ class AppSettings(context: Context) {
       preferences.edit().putInt(KEY_DEFAULT_DURATION, value).apply()
     }
 
+  var reminderMonthDays: Int
+    get() = preferences.getInt(KEY_REMINDER_MONTH_DAYS, DEFAULT_REMINDER_MONTH_DAYS)
+    set(value) {
+      preferences.edit().putInt(KEY_REMINDER_MONTH_DAYS, value.coerceIn(1, 365)).apply()
+    }
+
+  var reminderWeekDays: Int
+    get() = preferences.getInt(KEY_REMINDER_WEEK_DAYS, DEFAULT_REMINDER_WEEK_DAYS)
+    set(value) {
+      preferences.edit().putInt(KEY_REMINDER_WEEK_DAYS, value.coerceIn(0, 365)).apply()
+    }
+
+  var reminderOverdue: Boolean
+    get() = preferences.getBoolean(KEY_REMINDER_OVERDUE, true)
+    set(value) {
+      preferences.edit().putBoolean(KEY_REMINDER_OVERDUE, value).apply()
+    }
+
+  var allowNegativeStock: Boolean
+    get() = preferences.getBoolean(KEY_ALLOW_NEGATIVE_STOCK, false)
+    set(value) {
+      preferences.edit().putBoolean(KEY_ALLOW_NEGATIVE_STOCK, value).apply()
+    }
+
+  var showReportsInMore: Boolean
+    get() = preferences.getBoolean(KEY_SHOW_REPORTS, true)
+    set(value) {
+      preferences.edit().putBoolean(KEY_SHOW_REPORTS, value).apply()
+    }
+
   fun businessHours(): WeeklyHours {
     val stored = preferences.getString(KEY_BUSINESS_HOURS, null) ?: return WeeklyHours()
     return runCatching { json.decodeFromString<WeeklyHours>(stored) }
@@ -106,6 +136,13 @@ class AppSettings(context: Context) {
     const val KEY_BIOMETRIC_ENABLED = "biometric_enabled"
     const val KEY_DEFAULT_DURATION = "default_duration_minutes"
     const val KEY_BUSINESS_HOURS = "business_hours"
+    const val KEY_REMINDER_MONTH_DAYS = "reminder_month_days"
+    const val KEY_REMINDER_WEEK_DAYS = "reminder_week_days"
+    const val KEY_REMINDER_OVERDUE = "reminder_overdue"
+    const val KEY_ALLOW_NEGATIVE_STOCK = "allow_negative_stock"
+    const val KEY_SHOW_REPORTS = "show_reports"
     const val DEFAULT_DURATION_MINUTES = 30
+    const val DEFAULT_REMINDER_MONTH_DAYS = 30
+    const val DEFAULT_REMINDER_WEEK_DAYS = 7
   }
 }

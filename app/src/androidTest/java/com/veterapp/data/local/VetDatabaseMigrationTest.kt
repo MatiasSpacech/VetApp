@@ -145,6 +145,59 @@ class VetDatabaseMigrationTest {
     }
   }
 
+  @Test
+  fun migratesFromVersion5To8() {
+    helper.createDatabase(DATABASE_NAME, 5).use { database ->
+      database.execSQL(
+        "INSERT INTO pets (" +
+          "id, clinicId, name, species, breed, ownerName, notes, fotoUrl, " +
+          "createdAt, updatedAt, revision, deletedAt, originDeviceId, pendingSync, clientId, status" +
+          ") VALUES (" +
+          "'pet-1', 'clinic-1', 'Luna', 'Perro', NULL, 'Ana', NULL, NULL, " +
+          "1, 1, 0, NULL, 'device-1', 0, NULL, 'active'" +
+          ")",
+      )
+    }
+
+    helper
+      .runMigrationsAndValidate(
+        DATABASE_NAME,
+        8,
+        true,
+        VetDatabase.MIGRATION_5_6,
+        VetDatabase.MIGRATION_6_7,
+        VetDatabase.MIGRATION_7_8,
+      )
+      .use { database ->
+        database.query("SELECT sex, birthDate, approxAgeMonths FROM pets").use { cursor ->
+          assertTrue(cursor.moveToFirst())
+          assertTrue(cursor.isNull(0))
+          assertTrue(cursor.isNull(1))
+          assertTrue(cursor.isNull(2))
+        }
+        listOf(
+          "pet_weights",
+          "areas",
+          "categories",
+          "catalog_items",
+          "stock_movements",
+          "payment_methods",
+          "sales",
+          "sale_items",
+          "payments",
+          "cash_sessions",
+          "cash_movements",
+          "sale_cancellations",
+          "sale_counters",
+          "area_cost_settings",
+        ).forEach { table ->
+          database.query("SELECT COUNT(*) FROM $table").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(0, cursor.getInt(0))
+          }
+        }
+      }
+  }
   private companion object {
     const val DATABASE_NAME = "migration-test.db"
   }

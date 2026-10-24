@@ -24,6 +24,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -53,13 +54,24 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.veterapp.VeterAppApplication
 import com.veterapp.domain.AuditEvent
+import com.veterapp.domain.CategoryScope
 import com.veterapp.domain.PetStatus
+import com.veterapp.domain.formatPercentBp
+import com.veterapp.domain.parsePercentToBp
 import com.veterapp.security.BiometricUnlock
 import com.veterapp.security.PinPolicy
 import com.veterapp.security.findFragmentActivity
+import androidx.compose.material3.Icon
+import androidx.compose.ui.res.painterResource
+import com.veterapp.ui.common.AppIcons
+import com.veterapp.ui.common.AppFormSheet
+import com.veterapp.ui.common.AppBackTopBar
+import com.veterapp.ui.common.GradientHero
+import androidx.compose.ui.graphics.Color
 import com.veterapp.ui.common.TimeField
 import com.veterapp.ui.common.formatDateTime
 import com.veterapp.util.userMessage
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
@@ -78,6 +90,10 @@ fun SettingsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
   val security by viewModel.securityState.collectAsStateWithLifecycle()
   val lastBackupAt by viewModel.lastBackupAt.collectAsStateWithLifecycle()
   val auditEvents by viewModel.auditEvents.collectAsStateWithLifecycle(initialValue = emptyList())
+  val areas by viewModel.areas.collectAsStateWithLifecycle(initialValue = emptyList())
+  val categories by viewModel.categories.collectAsStateWithLifecycle(initialValue = emptyList())
+  val paymentMethods by viewModel.paymentMethods.collectAsStateWithLifecycle(initialValue = emptyList())
+  val areaCosts by viewModel.areaCosts.collectAsStateWithLifecycle(initialValue = emptyList())
   val snackbarHostState = remember { SnackbarHostState() }
   val scope = rememberCoroutineScope()
   val biometricAvailable = remember(context) { BiometricUnlock.isAvailable(context) }
@@ -93,12 +109,7 @@ fun SettingsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
   Scaffold(
     modifier = modifier.fillMaxSize(),
     topBar = {
-      TopAppBar(
-        title = { Text("Ajustes") },
-        navigationIcon = {
-          TextButton(onClick = onBack) { Text("Volver") }
-        },
-      )
+AppBackTopBar(title = "Ajustes", onBack = onBack)
     },
     snackbarHost = { SnackbarHost(snackbarHostState) },
   ) { padding ->
@@ -107,6 +118,22 @@ fun SettingsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
       verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
       item { Spacer(Modifier.height(4.dp)) }
+
+      item {
+        GradientHero {
+          Text(
+            "Tu clínica, a tu manera",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+          )
+          Text(
+            "Seguridad, agenda, catálogo y respaldo en un solo lugar.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Color.White.copy(alpha = 0.85f),
+          )
+        }
+      }
 
       item {
         Card(modifier = Modifier.fillMaxWidth()) {
@@ -199,6 +226,36 @@ fun SettingsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
       item {
         AgendaCard(
           viewModel = viewModel,
+          onMessage = { text, isError -> showMessage(text, isError) },
+        )
+      }
+
+      item {
+        RemindersCard(
+          viewModel = viewModel,
+          onMessage = { text, isError -> showMessage(text, isError) },
+        )
+      }
+
+      item {
+        InventorySettingsCard(viewModel = viewModel)
+      }
+
+      item {
+        CatalogSettingsCard(
+          viewModel = viewModel,
+          areas = areas,
+          categories = categories,
+          onMessage = { text, isError -> showMessage(text, isError) },
+        )
+      }
+
+      item {
+        EconomySettingsCard(
+          viewModel = viewModel,
+          areas = areas,
+          paymentMethods = paymentMethods,
+          areaCosts = areaCosts,
           onMessage = { text, isError -> showMessage(text, isError) },
         )
       }
@@ -360,6 +417,537 @@ private fun AgendaCard(
         Text(if (busy) "Guardando…" else "Guardar agenda")
       }
     }
+  }
+}
+
+@Composable
+private fun RemindersCard(
+  viewModel: SettingsViewModel,
+  onMessage: (String, Boolean) -> Unit,
+) {
+  var monthDays by remember { mutableStateOf(viewModel.reminderMonthDays().toString()) }
+  var weekDays by remember { mutableStateOf(viewModel.reminderWeekDays().toString()) }
+  var overdue by remember { mutableStateOf(viewModel.reminderOverdue()) }
+  var busy by remember { mutableStateOf(false) }
+
+  Card(modifier = Modifier.fillMaxWidth()) {
+    Column(
+      modifier = Modifier.padding(16.dp),
+      verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+      Text(
+        "Recordatorios",
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+      )
+      Text(
+        "Anticipación de los avisos de vacunas. Se aplican a los recordatorios nuevos y al dashboard.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(
+          value = monthDays,
+          onValueChange = { monthDays = it.filter { c -> c.isDigit() }.take(3) },
+          label = { Text("Días antes (mensual)") },
+          singleLine = true,
+          keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+          modifier = Modifier.weight(1f),
+        )
+        OutlinedTextField(
+          value = weekDays,
+          onValueChange = { weekDays = it.filter { c -> c.isDigit() }.take(3) },
+          label = { Text("Días antes (semanal)") },
+          singleLine = true,
+          keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+          modifier = Modifier.weight(1f),
+        )
+      }
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+          Text("Avisar vacunas vencidas", style = MaterialTheme.typography.titleSmall)
+          Text(
+            "Muestra y notifica las dosis vencidas.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+        Switch(checked = overdue, onCheckedChange = { overdue = it }, enabled = !busy)
+      }
+      Button(
+        onClick = {
+          busy = true
+          viewModel.saveReminders(
+            monthDays.toIntOrNull() ?: 30,
+            weekDays.toIntOrNull() ?: 7,
+            overdue,
+          ) { result ->
+            busy = false
+            result
+              .onSuccess { onMessage("Recordatorios guardados", false) }
+              .onFailure { onMessage(it.userMessage("No se pudieron guardar los recordatorios"), true) }
+          }
+        },
+        enabled = !busy,
+      ) {
+        Text(if (busy) "Guardando…" else "Guardar recordatorios")
+      }
+    }
+  }
+}
+
+@Composable
+private fun InventorySettingsCard(viewModel: SettingsViewModel) {
+  var allowNegative by remember { mutableStateOf(viewModel.allowNegativeStock) }
+  var confirmEnable by remember { mutableStateOf(false) }
+  Card(modifier = Modifier.fillMaxWidth()) {
+    Column(
+      modifier = Modifier.padding(16.dp),
+      verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+      Text("Inventario", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+          Text("Permitir stock negativo", style = MaterialTheme.typography.titleSmall)
+          Text(
+            "Por defecto se bloquea. Si se permite, la venta pide confirmación y queda auditada.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+        Switch(
+          checked = allowNegative,
+          onCheckedChange = { enabled ->
+            if (enabled) {
+              confirmEnable = true
+            } else {
+              allowNegative = false
+              viewModel.setAllowNegativeStock(false)
+            }
+          },
+        )
+      }
+    }
+  }
+
+  if (confirmEnable) {
+    AlertDialog(
+      onDismissRequest = { confirmEnable = false },
+      title = { Text("Permitir stock negativo") },
+      text = {
+        Text(
+          "Al habilitarlo, la app permitirá vender productos sin stock suficiente. " +
+            "Cada venta con stock negativo pedirá confirmación y quedará registrada en la auditoría. " +
+            "La configuración no se incluye en el backup.",
+          style = MaterialTheme.typography.bodyMedium,
+        )
+      },
+      confirmButton = {
+        TextButton(
+          onClick = {
+            confirmEnable = false
+            allowNegative = true
+            viewModel.setAllowNegativeStock(true)
+          },
+        ) {
+          Text("Habilitar")
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { confirmEnable = false }) { Text("Cancelar") }
+      },
+    )
+  }
+}
+
+@Composable
+private fun CatalogSettingsCard(
+  viewModel: SettingsViewModel,
+  areas: List<com.veterapp.domain.Area>,
+  categories: List<com.veterapp.domain.Category>,
+  onMessage: (String, Boolean) -> Unit,
+) {
+  var showAreaDialog by remember { mutableStateOf(false) }
+  var showCategoryDialog by remember { mutableStateOf(false) }
+  var editingArea by remember { mutableStateOf<com.veterapp.domain.Area?>(null) }
+  var editingCategory by remember { mutableStateOf<com.veterapp.domain.Category?>(null) }
+  var areaName by remember { mutableStateOf("") }
+  var categoryName by remember { mutableStateOf("") }
+  var categoryParent by remember { mutableStateOf<String?>(null) }
+  var categoryScope by remember { mutableStateOf(CategoryScope.Both.storage) }
+
+  Card(modifier = Modifier.fillMaxWidth()) {
+    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      Text("Catálogo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+      Text(
+        "Áreas y categorías. No se desactivan si tienen ítems activos.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+      Text("Áreas", style = MaterialTheme.typography.titleSmall)
+      areas.forEach { area ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text(area.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+          TextButton(
+            onClick = {
+              editingArea = area
+              areaName = area.name
+              showAreaDialog = true
+            },
+          ) { Text("Editar") }
+          Switch(
+            checked = area.active,
+            onCheckedChange = { active ->
+              viewModel.updateArea(area.id, area.name, active) { result ->
+                result.onFailure { onMessage(it.userMessage("No se pudo actualizar el área"), true) }
+              }
+            },
+          )
+        }
+      }
+      OutlinedButton(
+        onClick = {
+          editingArea = null
+          areaName = ""
+          showAreaDialog = true
+        },
+      ) { Text("Agregar área") }
+      HorizontalDivider()
+      Text("Categorías", style = MaterialTheme.typography.titleSmall)
+      if (categories.isEmpty()) {
+        Text(
+          "Sin categorías. Podés crear categorías y subcategorías.",
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+      categories.forEach { category ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text(
+            (if (category.parentId != null) "→ " else "") + category.name +
+              " (${category.scope.label})",
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+          )
+          TextButton(
+            onClick = {
+              editingCategory = category
+              categoryName = category.name
+              showCategoryDialog = true
+            },
+          ) { Text("Editar") }
+          Switch(
+            checked = category.active,
+            onCheckedChange = { active ->
+              viewModel.updateCategory(category.id, category.name, active) { result ->
+                result.onFailure { onMessage(it.userMessage("No se pudo actualizar la categoría"), true) }
+              }
+            },
+          )
+        }
+      }
+      OutlinedButton(
+        onClick = {
+          editingCategory = null
+          categoryName = ""
+          categoryParent = null
+          showCategoryDialog = true
+        },
+      ) { Text("Agregar categoría") }
+    }
+  }
+
+  if (showAreaDialog) {
+    AlertDialog(
+      onDismissRequest = {
+        showAreaDialog = false
+        editingArea = null
+      },
+      title = { Text(if (editingArea == null) "Nueva área" else "Editar área") },
+      text = {
+        OutlinedTextField(
+          value = areaName,
+          onValueChange = { areaName = it },
+          label = { Text("Nombre *") },
+          modifier = Modifier.fillMaxWidth(),
+        )
+      },
+      confirmButton = {
+        TextButton(
+          onClick = {
+            val target = editingArea
+            val onResult: (Result<Unit>) -> Unit = { result ->
+              result
+                .onSuccess {
+                  showAreaDialog = false
+                  editingArea = null
+                  areaName = ""
+                  onMessage(if (target == null) "Área creada" else "Área actualizada", false)
+                }
+                .onFailure {
+                  onMessage(
+                    it.userMessage(
+                      if (target == null) "No se pudo crear el área" else "No se pudo actualizar el área",
+                    ),
+                    true,
+                  )
+                }
+            }
+            if (target == null) {
+              viewModel.createArea(areaName, onResult)
+            } else {
+              viewModel.updateArea(target.id, areaName, target.active, onResult)
+            }
+          },
+        ) { Text(if (editingArea == null) "Crear" else "Guardar") }
+      },
+      dismissButton = {
+        TextButton(
+          onClick = {
+            showAreaDialog = false
+            editingArea = null
+          },
+        ) { Text("Cancelar") }
+      },
+    )
+  }
+
+  if (showCategoryDialog) {
+    AlertDialog(
+      onDismissRequest = {
+        showCategoryDialog = false
+        editingCategory = null
+      },
+      title = { Text(if (editingCategory == null) "Nueva categoría" else "Editar categoría") },
+      text = {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          OutlinedTextField(
+            value = categoryName,
+            onValueChange = { categoryName = it },
+            label = { Text("Nombre *") },
+            modifier = Modifier.fillMaxWidth(),
+          )
+          if (editingCategory == null) {
+            Text("Categoría padre", style = MaterialTheme.typography.bodySmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+              FilterChip(
+                selected = categoryParent == null,
+                onClick = { categoryParent = null },
+                label = { Text("Ninguna") },
+              )
+              categories.filter { it.parentId == null }.forEach { category ->
+                FilterChip(
+                  selected = categoryParent == category.id,
+                  onClick = { categoryParent = category.id },
+                  label = { Text(category.name) },
+                )
+              }
+            }
+            Text("Alcance", style = MaterialTheme.typography.bodySmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+              CategoryScope.entries.forEach { scope ->
+                FilterChip(
+                  selected = categoryScope == scope.storage,
+                  onClick = { categoryScope = scope.storage },
+                  label = { Text(scope.label) },
+                )
+              }
+            }
+          }
+        }
+      },
+      confirmButton = {
+        TextButton(
+          onClick = {
+            val target = editingCategory
+            val onResult: (Result<Unit>) -> Unit = { result ->
+              result
+                .onSuccess {
+                  showCategoryDialog = false
+                  editingCategory = null
+                  categoryName = ""
+                  categoryParent = null
+                  onMessage(if (target == null) "Categoría creada" else "Categoría actualizada", false)
+                }
+                .onFailure {
+                  onMessage(
+                    it.userMessage(
+                      if (target == null) "No se pudo crear la categoría" else "No se pudo actualizar la categoría",
+                    ),
+                    true,
+                  )
+                }
+            }
+            if (target == null) {
+              viewModel.createCategory(
+                categoryName,
+                categoryParent,
+                CategoryScope.fromStorage(categoryScope),
+                onResult,
+              )
+            } else {
+              viewModel.updateCategory(target.id, categoryName, target.active, onResult)
+            }
+          },
+        ) { Text(if (editingCategory == null) "Crear" else "Guardar") }
+      },
+      dismissButton = {
+        TextButton(
+          onClick = {
+            showCategoryDialog = false
+            editingCategory = null
+          },
+        ) { Text("Cancelar") }
+      },
+    )
+  }
+}
+@Composable
+private fun EconomySettingsCard(
+  viewModel: SettingsViewModel,
+  areas: List<com.veterapp.domain.Area>,
+  paymentMethods: List<com.veterapp.domain.PaymentMethod>,
+  areaCosts: List<com.veterapp.data.local.AreaCostSettingEntity>,
+  onMessage: (String, Boolean) -> Unit,
+) {
+  var showMethodDialog by remember { mutableStateOf(false) }
+  var methodName by remember { mutableStateOf("") }
+  var methodCash by remember { mutableStateOf(false) }
+  var costArea by remember { mutableStateOf<com.veterapp.domain.Area?>(null) }
+  var costPercent by remember { mutableStateOf("") }
+  val today = com.veterapp.domain.ClinicTime.today().toString()
+
+  fun effectiveCost(areaId: String): Int =
+    areaCosts
+      .filter { it.areaId == areaId && it.validFrom <= today }
+      .maxByOrNull { it.validFrom }
+      ?.expensesPercentBp ?: 0
+
+  Card(modifier = Modifier.fillMaxWidth()) {
+    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      Text("Economía", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+      Text(
+        "Medios de pago y porcentaje de gastos por área. El porcentaje se congela en cada línea de venta.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+      Text("Medios de pago", style = MaterialTheme.typography.titleSmall)
+      paymentMethods.forEach { method ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text(
+            method.name + if (method.affectsCash) " · efectivo" else "",
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+          )
+          Switch(
+            checked = method.active,
+            onCheckedChange = { active ->
+              viewModel.updatePaymentMethod(method.id, method.name, active) { result ->
+                result.onFailure { onMessage(it.userMessage("No se pudo actualizar el medio"), true) }
+              }
+            },
+          )
+        }
+      }
+      OutlinedButton(onClick = { showMethodDialog = true }) { Text("Agregar medio de pago") }
+      HorizontalDivider()
+      Text("Gastos estimados por área", style = MaterialTheme.typography.titleSmall)
+      areas.filter { it.active }.forEach { area ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text(area.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+          Text(formatPercentBp(effectiveCost(area.id)), style = MaterialTheme.typography.bodySmall)
+          TextButton(
+            onClick = {
+              costArea = area
+              costPercent = (effectiveCost(area.id) / 100.0).toString()
+            },
+          ) { Text("Cambiar") }
+        }
+      }
+      Text(
+        "Un área sin porcentaje se muestra como \"sin porcentaje configurado\" en los reportes.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+    }
+  }
+
+  if (showMethodDialog) {
+    AlertDialog(
+      onDismissRequest = { showMethodDialog = false },
+      title = { Text("Nuevo medio de pago") },
+      text = {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          OutlinedTextField(
+            value = methodName,
+            onValueChange = { methodName = it },
+            label = { Text("Nombre *") },
+            modifier = Modifier.fillMaxWidth(),
+          )
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Afecta el efectivo de la caja", modifier = Modifier.weight(1f))
+            Switch(checked = methodCash, onCheckedChange = { methodCash = it })
+          }
+        }
+      },
+      confirmButton = {
+        TextButton(
+          onClick = {
+            viewModel.createPaymentMethod(methodName, methodCash) { result ->
+              result
+                .onSuccess {
+                  showMethodDialog = false
+                  methodName = ""
+                  methodCash = false
+                  onMessage("Medio de pago creado", false)
+                }
+                .onFailure { onMessage(it.userMessage("No se pudo crear el medio"), true) }
+            }
+          },
+        ) { Text("Crear") }
+      },
+      dismissButton = { TextButton(onClick = { showMethodDialog = false }) { Text("Cancelar") } },
+    )
+  }
+
+  costArea?.let { area ->
+    AlertDialog(
+      onDismissRequest = { costArea = null },
+      title = { Text("Gastos de ${area.name}") },
+      text = {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          OutlinedTextField(
+            value = costPercent,
+            onValueChange = { costPercent = it.filter { c -> c.isDigit() || c == ',' || c == '.' } },
+            label = { Text("Porcentaje sobre la facturación neta *") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.fillMaxWidth(),
+          )
+          Text(
+            "Rige desde hoy. Cambiarlo no modifica ventas anteriores.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+      },
+      confirmButton = {
+        TextButton(
+          onClick = {
+            val bp = parsePercentToBp(costPercent) ?: return@TextButton
+            viewModel.setAreaCost(area.id, bp) { result ->
+              result
+                .onSuccess {
+                  costArea = null
+                  onMessage("Porcentaje actualizado", false)
+                }
+                .onFailure { onMessage(it.userMessage("No se pudo guardar el porcentaje"), true) }
+            }
+          },
+        ) { Text("Guardar") }
+      },
+      dismissButton = { TextButton(onClick = { costArea = null }) { Text("Cancelar") } },
+    )
   }
 }
 
@@ -570,95 +1158,67 @@ private fun PinDialog(
     }
   }
 
-  AlertDialog(
-    onDismissRequest = { if (!busy) onDismiss() },
-    title = {
-      Text(
-        when (mode) {
-          PinDialogMode.Create -> "Crear PIN"
-          PinDialogMode.Change -> "Cambiar PIN"
-          PinDialogMode.Remove -> "Quitar bloqueo"
-        },
+  AppFormSheet(
+    title =
+      when (mode) {
+        PinDialogMode.Create -> "Crear PIN"
+        PinDialogMode.Change -> "Cambiar PIN"
+        PinDialogMode.Remove -> "Quitar bloqueo"
+      },
+    subtitle =
+      when (mode) {
+        PinDialogMode.Create -> "Protegé el acceso con un PIN de 4 a 8 dígitos."
+        PinDialogMode.Change -> "Ingresá el PIN actual y elegí uno nuevo."
+        PinDialogMode.Remove -> "Se desactiva el bloqueo y la biometría."
+      },
+    confirmLabel =
+      when (mode) {
+        PinDialogMode.Create -> "Crear PIN"
+        PinDialogMode.Change -> "Cambiar PIN"
+        PinDialogMode.Remove -> "Quitar bloqueo"
+      },
+    onConfirm = ::submit,
+    onDismiss = onDismiss,
+    busy = busy,
+    dirty = false,
+  ) {
+    Text(
+      when (mode) {
+        PinDialogMode.Create ->
+          "Elegí un PIN de ${PinPolicy.MIN_LENGTH} a ${PinPolicy.MAX_LENGTH} dígitos. Lo vas a usar para desbloquear la app."
+        PinDialogMode.Change -> "Ingresá el PIN actual y elegí uno nuevo."
+        PinDialogMode.Remove ->
+          "Se desactiva el bloqueo y también la biometría. La app quedará abierta para cualquiera que use el dispositivo."
+      },
+      style = MaterialTheme.typography.bodySmall,
+      color =
+        if (mode == PinDialogMode.Remove) MaterialTheme.colorScheme.error
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    if (mode != PinDialogMode.Create) {
+      PinInput(
+        value = currentPin,
+        onValueChange = { currentPin = filterDigits(it) },
+        label = "PIN actual",
       )
-    },
-    text = {
-      Column(
-        modifier = Modifier.verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-      ) {
-        when (mode) {
-          PinDialogMode.Create ->
-            Text(
-              "Elegí un PIN de ${PinPolicy.MIN_LENGTH} a ${PinPolicy.MAX_LENGTH} dígitos. Lo vas a usar para desbloquear la app.",
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-          PinDialogMode.Change ->
-            Text(
-              "Ingresá el PIN actual y elegí uno nuevo.",
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-          PinDialogMode.Remove ->
-            Text(
-              "Se desactiva el bloqueo y también la biometría. La app quedará abierta para cualquiera que use el dispositivo.",
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.error,
-            )
-        }
-
-        if (mode != PinDialogMode.Create) {
-          PinInput(
-            value = currentPin,
-            onValueChange = { currentPin = filterDigits(it) },
-            label = "PIN actual",
-          )
-        }
-        if (mode != PinDialogMode.Remove) {
-          PinInput(
-            value = newPin,
-            onValueChange = { newPin = filterDigits(it) },
-            label = if (mode == PinDialogMode.Create) "PIN" else "PIN nuevo",
-          )
-          PinInput(
-            value = confirmation,
-            onValueChange = { confirmation = filterDigits(it) },
-            label = "Repetir PIN",
-          )
-        }
-
-        error?.let {
-          Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-        }
-        if (busy) {
-          Row(verticalAlignment = Alignment.CenterVertically) {
-            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-            Spacer(Modifier.width(8.dp))
-            Text("Guardando…", style = MaterialTheme.typography.bodySmall)
-          }
-        }
-      }
-    },
-    confirmButton = {
-      TextButton(
-        onClick = ::submit,
-        enabled = !busy,
-      ) {
-        Text(
-          when (mode) {
-            PinDialogMode.Create -> "Crear"
-            PinDialogMode.Change -> "Cambiar"
-            PinDialogMode.Remove -> "Quitar"
-          },
-        )
-      }
-    },
-    dismissButton = {
-      TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancelar") }
-    },
-  )
+    }
+    if (mode != PinDialogMode.Remove) {
+      PinInput(
+        value = newPin,
+        onValueChange = { newPin = filterDigits(it) },
+        label = if (mode == PinDialogMode.Create) "PIN" else "PIN nuevo",
+      )
+      PinInput(
+        value = confirmation,
+        onValueChange = { confirmation = filterDigits(it) },
+        label = "Repetir PIN",
+      )
+    }
+    error?.let {
+      Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+    }
+  }
 }
-
 @Composable
 private fun PinInput(value: String, onValueChange: (String) -> Unit, label: String) {
   OutlinedTextField(
@@ -666,12 +1226,18 @@ private fun PinInput(value: String, onValueChange: (String) -> Unit, label: Stri
     onValueChange = onValueChange,
     label = { Text(label) },
     singleLine = true,
+    leadingIcon = {
+      Icon(
+        painter = painterResource(AppIcons.Lock),
+        contentDescription = null,
+        modifier = Modifier.size(20.dp),
+      )
+    },
     visualTransformation = PasswordVisualTransformation(),
     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
     modifier = Modifier.fillMaxWidth(),
   )
 }
-
 @Composable
 private fun AuditRow(event: AuditEvent) {
   Card(
@@ -704,6 +1270,8 @@ private fun auditActionLabel(action: String): String =
     "pet.status" -> "Estado de mascota cambiado"
     "pet.owner.change" -> "Cambio de propietario"
     "pet.delete" -> "Mascota archivada"
+    "pet.weight.create" -> "Peso registrado"
+    "pet.weight.delete" -> "Peso borrado"
     "client.create" -> "Cliente creado"
     "client.update" -> "Cliente editado"
     "client.delete" -> "Cliente archivado"
@@ -713,7 +1281,35 @@ private fun auditActionLabel(action: String): String =
     "appointment.cancel" -> "Turno cancelado"
     "appointment.no_show" -> "Turno marcado como ausente"
     "appointment.attend" -> "Turno atendido"
+    "catalog.create" -> "Ítem creado"
+    "catalog.update" -> "Ítem editado"
+    "catalog.price" -> "Precio o costo actualizado"
+    "catalog.activate" -> "Ítem activado"
+    "catalog.deactivate" -> "Ítem desactivado"
+    "stock.entry" -> "Entrada de stock"
+    "stock.adjustment" -> "Ajuste de stock"
+    "stock.loss" -> "Pérdida de stock"
+    "stock.recalculate" -> "Stock recalculado"
+    "stock.negative" -> "Stock negativo confirmado"
+    "area.create" -> "Área creada"
+    "area.update" -> "Área actualizada"
+    "category.create" -> "Categoría creada"
+    "category.update" -> "Categoría actualizada"
+    "area.cost.update" -> "Porcentaje de gastos actualizado"
+    "payment_method.create" -> "Medio de pago creado"
+    "payment_method.update" -> "Medio de pago actualizado"
+    "sale.create" -> "Venta registrada"
+    "sale.cancel" -> "Venta anulada"
+    "cash.open" -> "Caja abierta"
+    "cash.close" -> "Caja cerrada"
+    "cash.withdrawal" -> "Retiro de caja"
+    "cash.expense" -> "Gasto de caja"
+    "cash.adjustment" -> "Ajuste de caja"
+    "report.export" -> "Reporte exportado"
+    "cash.pdf.export" -> "PDF de cierre exportado"
     "settings.agenda.update" -> "Agenda actualizada"
+    "settings.reminders.update" -> "Recordatorios actualizados"
+    "settings.stock.update" -> "Configuración de stock actualizada"
     "backup.export" -> "Backup exportado"
     "backup.restore" -> "Backup restaurado"
     "security.pin.create" -> "PIN configurado"

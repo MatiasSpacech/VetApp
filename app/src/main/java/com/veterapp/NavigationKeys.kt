@@ -10,3 +10,9 @@ import kotlinx.serialization.Serializable
 @Serializable data class ClientDetail(val clientId: String) : NavKey
 
 @Serializable data class PetDetail(val petId: String) : NavKey
+
+@Serializable data object PetsList : NavKey
+
+@Serializable data object Inventory : NavKey
+
+@Serializable data object Reports : NavKey

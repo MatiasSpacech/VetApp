@@ -1,32 +1,30 @@
 package com.veterapp.ui.pets
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.veterapp.domain.Pet
 import com.veterapp.domain.PetStatus
+import com.veterapp.theme.AppSpacing
+import com.veterapp.ui.common.AppIcons
+import com.veterapp.ui.common.EmptyState
+import com.veterapp.ui.common.FilterOption
+import com.veterapp.ui.common.FilterPillRow
+import com.veterapp.ui.common.SearchField
 
 private enum class PetFilter(val label: String) {
   All("Todas"),
@@ -63,84 +61,66 @@ fun PetsTab(
       matchesSearch && matchesFilter
     }
 
-  Column(modifier = modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-    Spacer(Modifier.height(8.dp))
-    OutlinedTextField(
+  Column(modifier = modifier.fillMaxSize().padding(horizontal = AppSpacing.lg)) {
+    Spacer(Modifier.size(AppSpacing.xs))
+    SearchField(
       value = search,
       onValueChange = { search = it },
-      label = { Text("Buscar por mascota o dueño") },
-      singleLine = true,
-      modifier = Modifier.fillMaxWidth(),
+      placeholder = "Buscar por mascota o dueño",
     )
-    Spacer(Modifier.height(8.dp))
-    Row(
-      modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-      horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-      PetFilter.entries.forEach { option ->
-        FilterChip(
-          selected = filter == option,
-          onClick = { filterStorage = option.name },
-          label = { Text(option.label) },
-        )
-      }
-    }
-    Spacer(Modifier.height(12.dp))
+    Spacer(Modifier.size(AppSpacing.xs))
+    FilterPillRow(
+      options =
+        listOf(
+          FilterOption(PetFilter.Active.name, PetFilter.Active.label),
+          FilterOption(PetFilter.Inactive.name, PetFilter.Inactive.label),
+          FilterOption(PetFilter.Deceased.name, PetFilter.Deceased.label),
+        ),
+      selectedId = filter.takeIf { it != PetFilter.All }?.name,
+      onSelect = { id -> filterStorage = id ?: PetFilter.All.name },
+      allLabel = "Todas",
+    )
+    Spacer(Modifier.size(AppSpacing.xs))
+    Text(
+      "${visible.size} mascota(s)",
+      style = MaterialTheme.typography.labelMedium,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.size(AppSpacing.xs))
 
     when {
-      pets.isEmpty() -> EmptyPets(hasClients, onNewPet)
-      visible.isEmpty() -> NoPetResults(search)
-      else -> {
+      pets.isEmpty() ->
+        EmptyState(
+          title = "Todavía no hay mascotas",
+          description =
+            if (hasClients) {
+              "Agregá la primera mascota y empezá su historia clínica."
+            } else {
+              "Creá un cliente y después su mascota."
+            },
+          icon = AppIcons.Pets,
+          actionLabel = "Nueva mascota",
+          onAction = onNewPet,
+        )
+      visible.isEmpty() ->
+        EmptyState(
+          title = "Sin resultados",
+          description = "No encontramos mascotas para \"$search\".",
+          icon = AppIcons.Search,
+          actionLabel = "Limpiar búsqueda",
+          onAction = { search = "" },
+        )
+      else ->
         LazyColumn(
           modifier = Modifier.fillMaxSize(),
+          contentPadding =
+            androidx.compose.foundation.layout.PaddingValues(top = 2.dp, bottom = 96.dp),
           verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
           items(visible, key = { it.id }) { pet ->
             PetCard(pet = pet, onClick = { onOpenPet(pet.id) })
           }
-          item { Spacer(Modifier.height(88.dp)) }
         }
-      }
     }
-  }
-}
-
-@Composable
-private fun EmptyPets(hasClients: Boolean, onNewPet: () -> Unit) {
-  Column(
-    modifier = Modifier.fillMaxSize(),
-    verticalArrangement = Arrangement.Center,
-    horizontalAlignment = Alignment.CenterHorizontally,
-  ) {
-    Text("Todavía no hay mascotas", style = MaterialTheme.typography.titleMedium)
-    Spacer(Modifier.height(6.dp))
-    Text(
-      if (hasClients) {
-        "Agregá la primera con el botón de abajo."
-      } else {
-        "Creá un cliente y después su mascota."
-      },
-      style = MaterialTheme.typography.bodyMedium,
-      color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    Spacer(Modifier.height(16.dp))
-    Button(onClick = onNewPet) { Text("Nueva mascota") }
-  }
-}
-
-@Composable
-private fun NoPetResults(search: String) {
-  Column(
-    modifier = Modifier.fillMaxSize(),
-    verticalArrangement = Arrangement.Center,
-    horizontalAlignment = Alignment.CenterHorizontally,
-  ) {
-    Text("Sin resultados para \"$search\"", style = MaterialTheme.typography.titleMedium)
-    Spacer(Modifier.height(6.dp))
-    Text(
-      "Probá con otro nombre, dueño o estado.",
-      style = MaterialTheme.typography.bodyMedium,
-      color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
   }
 }

@@ -1,41 +1,33 @@
 package com.veterapp.ui.common
 
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.veterapp.domain.VaccineStatus
+import com.veterapp.theme.extendedColors
 
 @Composable
 fun VaccineStatusChip(status: VaccineStatus, modifier: Modifier = Modifier) {
-  val container =
+  val (icon, container, content) =
     when (status) {
-      VaccineStatus.Overdue -> MaterialTheme.colorScheme.errorContainer
-      VaccineStatus.DueSoon -> MaterialTheme.colorScheme.tertiaryContainer
-      VaccineStatus.Upcoming -> MaterialTheme.colorScheme.primaryContainer
-      VaccineStatus.Scheduled -> MaterialTheme.colorScheme.surfaceVariant
+      VaccineStatus.Overdue ->
+        Triple(AppIcons.Warning, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
+      VaccineStatus.DueSoon ->
+        Triple(
+          AppIcons.NotificationsActive,
+          MaterialTheme.extendedColors.warningContainer,
+          MaterialTheme.extendedColors.onWarningContainer,
+        )
+      VaccineStatus.Upcoming ->
+        Triple(AppIcons.Notifications, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+      VaccineStatus.Scheduled ->
+        Triple(AppIcons.Schedule, MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.onSurfaceVariant)
     }
-  val content =
-    when (status) {
-      VaccineStatus.Overdue -> MaterialTheme.colorScheme.onErrorContainer
-      VaccineStatus.DueSoon -> MaterialTheme.colorScheme.onTertiaryContainer
-      VaccineStatus.Upcoming -> MaterialTheme.colorScheme.onPrimaryContainer
-      VaccineStatus.Scheduled -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-  Surface(
+  StatusPill(
+    label = status.label,
+    icon = icon,
     modifier = modifier,
-    shape = RoundedCornerShape(50),
-    color = container,
+    container = container,
     contentColor = content,
-  ) {
-    Text(
-      status.label,
-      modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-      style = MaterialTheme.typography.labelMedium,
-    )
-  }
+  )
 }

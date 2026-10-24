@@ -38,6 +38,12 @@ class AppointmentRepository(
   fun observeBetween(from: Long, to: Long): Flow<List<Appointment>> =
     appointmentDao.observeBetween(from, to).map { rows -> rows.map(AppointmentWithPet::toDomain) }
 
+  fun observeUpcomingForPet(petId: String, from: Long = 0L): Flow<List<Appointment>> =
+    appointmentDao.observeForPetFrom(petId, from).map { rows -> rows.map(AppointmentWithPet::toDomain) }
+
+  fun observeUpcomingForClient(clientId: String, from: Long = 0L): Flow<List<Appointment>> =
+    appointmentDao.observeForClientFrom(clientId, from).map { rows -> rows.map(AppointmentWithPet::toDomain) }
+
   suspend fun findById(id: String): Appointment? =
     appointmentDao.findByIdWithPet(id)?.toDomain()
 

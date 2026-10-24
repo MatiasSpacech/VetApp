@@ -22,6 +22,12 @@ class AppointmentsViewModel(private val container: AppContainer) : ViewModel() {
   fun observeBetween(from: Long, to: Long): Flow<List<Appointment>> =
     container.appointmentRepository.observeBetween(from, to)
 
+  fun observeForPet(petId: String): Flow<List<Appointment>> =
+    container.appointmentRepository.observeUpcomingForPet(petId)
+
+  fun observeForClient(clientId: String): Flow<List<Appointment>> =
+    container.appointmentRepository.observeUpcomingForClient(clientId)
+
   val todayAppointments: StateFlow<List<Appointment>> =
     flow {
         val today = ClinicTime.todayEpochDay()

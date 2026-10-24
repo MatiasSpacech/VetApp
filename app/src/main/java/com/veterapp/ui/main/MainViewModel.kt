@@ -53,8 +53,18 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
   init {
     if (!container.authRepository.isConfigured) {
       authState.value = AuthUiState.Local(container.settings.localClinicId)
+      seedDefaults(container.settings.localClinicId)
     } else {
       observeSession()
+    }
+  }
+
+  private fun seedDefaults(clinicId: String) {
+    viewModelScope.launch {
+      runCatching {
+        container.catalogRepository.ensureDefaults(clinicId)
+        container.commerceRepository.ensureDefaults(clinicId)
+      }
     }
   }
 
@@ -82,6 +92,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     try {
       val clinicId = container.authRepository.ensureClinicId()
       authState.value = AuthUiState.SignedIn(clinicId)
+      seedDefaults(clinicId)
       syncNow()
     } catch (error: Throwable) {
       authState.value =

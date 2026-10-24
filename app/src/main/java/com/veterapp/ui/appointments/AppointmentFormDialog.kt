@@ -33,6 +33,7 @@ import com.veterapp.domain.AppointmentSaveResult
 import com.veterapp.domain.AppointmentWarning
 import com.veterapp.domain.ClinicTime
 import com.veterapp.domain.Pet
+import com.veterapp.ui.common.AppFormSheet
 import com.veterapp.ui.common.DateField
 import com.veterapp.ui.common.TimeField
 import com.veterapp.ui.common.formatDate
@@ -108,15 +109,15 @@ fun AppointmentFormDialog(
     }
   }
 
-  AlertDialog(
-    onDismissRequest = { if (!busy) onDismiss() },
-    title = { Text(if (editing) "Editar turno" else "Nuevo turno") },
-    text = {
-      Column(
-        modifier = Modifier.verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-      ) {
-        if (editing) {
+  AppFormSheet(
+    title = if (editing) "Editar turno" else "Nuevo turno",
+    subtitle = "Elegí mascota, fecha, duración y motivo.",
+    confirmLabel = "Guardar turno",
+    onConfirm = { submit(force = false) },
+    onDismiss = onDismiss,
+    busy = busy,
+    dirty = false,
+  ) {        if (editing) {
           Text(
             selectedPet?.let { "${it.name} · ${it.ownerName}" } ?: "Mascota del turno",
             style = MaterialTheme.typography.titleSmall,
@@ -190,17 +191,9 @@ fun AppointmentFormDialog(
             Text("Guardando…", style = MaterialTheme.typography.bodySmall)
           }
         }
-      }
-    },
-    confirmButton = {
-      TextButton(onClick = { submit(force = false) }, enabled = !busy) {
-        Text(if (busy) "Guardando…" else "Guardar")
-      }
-    },
-    dismissButton = {
-      TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancelar") }
-    },
-  )
+
+  }
+
 
   if (showPetPicker) {
     PetPickerDialog(

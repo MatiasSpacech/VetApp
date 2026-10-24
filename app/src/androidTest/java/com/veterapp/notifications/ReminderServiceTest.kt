@@ -41,7 +41,7 @@ class ReminderServiceTest {
       val pets = PetRepository(database, settings, audit)
       val vaccinations = VaccinationRepository(database, settings, audit)
       val notifier = FakeNotifier()
-      val service = ReminderService(vaccinations, database.vaccinationNotificationDao(), notifier)
+      val service = ReminderService(vaccinations, database.vaccinationNotificationDao(), notifier, settings)
       val petId = UUID.randomUUID().toString()
       val today = LocalDate.of(2026, 10, 24)
 

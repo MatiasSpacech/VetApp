@@ -13,12 +13,23 @@ interface OutboxDao {
     "SELECT * FROM sync_outbox WHERE nextAttemptAt <= :now " +
       "ORDER BY CASE entityType " +
       "WHEN 'client' THEN 0 " +
-      "WHEN 'pet' THEN 1 " +
-      "WHEN 'consultation' THEN 2 " +
-      "WHEN 'consultation_addendum' THEN 3 " +
-      "WHEN 'appointment' THEN 4 " +
-      "WHEN 'vaccination' THEN 5 " +
-      "ELSE 6 END, " +
+      "WHEN 'area' THEN 1 " +
+      "WHEN 'category' THEN 2 " +
+      "WHEN 'payment_method' THEN 3 " +
+      "WHEN 'area_cost' THEN 4 " +
+      "WHEN 'pet' THEN 5 " +
+      "WHEN 'pet_weight' THEN 6 " +
+      "WHEN 'consultation' THEN 7 " +
+      "WHEN 'consultation_addendum' THEN 8 " +
+      "WHEN 'vaccination' THEN 9 " +
+      "WHEN 'appointment' THEN 10 " +
+      "WHEN 'catalog_item' THEN 11 " +
+      "WHEN 'stock_movement' THEN 12 " +
+      "WHEN 'cash_session' THEN 13 " +
+      "WHEN 'sale' THEN 14 " +
+      "WHEN 'sale_cancellation' THEN 15 " +
+      "WHEN 'cash_movement' THEN 16 " +
+      "ELSE 17 END, " +
       "createdAt ASC LIMIT :limit",
   )
   suspend fun due(now: Long, limit: Int): List<OutboxEntity>

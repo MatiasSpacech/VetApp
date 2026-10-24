@@ -38,6 +38,9 @@ fun planReminders(
   today: LocalDate,
   candidates: List<VaccinationReminderCandidate>,
   alreadyNotified: Set<ReminderKey>,
+  monthDays: Int = 30,
+  weekDays: Int = 7,
+  includeOverdue: Boolean = true,
 ): List<ReminderPlan> =
   candidates
     .latestCandidatesPerPetAndVaccine()
@@ -47,9 +50,9 @@ fun planReminders(
       val days = dueOn - today.toEpochDay()
       val milestone =
         when {
-          days < 0 -> ReminderMilestone.Overdue
-          days <= 7 -> ReminderMilestone.Week
-          days <= 30 -> ReminderMilestone.Month
+          days < 0 -> if (includeOverdue) ReminderMilestone.Overdue else return@mapNotNull null
+          days <= weekDays -> ReminderMilestone.Week
+          days <= monthDays -> ReminderMilestone.Month
           else -> return@mapNotNull null
         }
       val key = ReminderKey(vaccination.id, dueOn, milestone)

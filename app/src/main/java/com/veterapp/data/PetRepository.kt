@@ -4,14 +4,21 @@ import androidx.room.withTransaction
 import com.veterapp.data.local.OutboxEntity
 import com.veterapp.data.local.PetEntity
 import com.veterapp.data.local.PetOwnerHistoryEntity
+import com.veterapp.data.local.PetWeightEntity
 import com.veterapp.data.local.VetDatabase
 import com.veterapp.data.remote.PetDto
+import com.veterapp.data.remote.PetWeightDto
 import com.veterapp.data.remote.toDto
 import com.veterapp.data.remote.toEntity
+import com.veterapp.domain.ClinicTime
 import com.veterapp.domain.Pet
 import com.veterapp.domain.PetDraft
 import com.veterapp.domain.PetOwnerHistory
+import com.veterapp.domain.PetSex
 import com.veterapp.domain.PetStatus
+import com.veterapp.domain.PetWeight
+import com.veterapp.domain.PetWeightDraft
+import com.veterapp.domain.ReproductiveStatus
 import com.veterapp.domain.toDomain
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
@@ -28,10 +35,11 @@ class PetRepository(
   private val settings: AppSettings,
   private val auditRepository: AuditRepository = AuditRepository(database, settings),
 ) {
-  private val petDao = database.petDao()
+   private val petDao = database.petDao()
   private val clientDao = database.clientDao()
   private val outboxDao = database.outboxDao()
   private val ownerHistoryDao = database.ownerHistoryDao()
+  private val weightDao = database.petWeightDao()
   private val json = Json { encodeDefaults = true }
 
   val pets: Flow<List<Pet>> =
@@ -58,12 +66,137 @@ class PetRepository(
       rows.map(PetOwnerHistoryEntity::toDomain)
     }
 
+  fun observeWeights(petId: String): Flow<List<PetWeight>> =
+    weightDao.observeForPet(petId).map { rows -> rows.map(PetWeightEntity::toDomain) }
+
+  suspend fun addWeight(petId: String, draft: PetWeightDraft): PetWeight {
+    draft.validate()?.let { error(it) }
+    val pet = petDao.findById(petId) ?: error("La mascota no existe")
+    require(pet.deletedAt == null) { "La mascota está archivada" }
+    val now = System.currentTimeMillis()
+    val entity =
+      PetWeightEntity(
+        id = UUID.randomUUID().toString(),
+        clinicId = pet.clinicId,
+        petId = pet.id,
+        measuredAt = ClinicTime.instantAtNoon(draft.measuredOn),
+        weightGrams = draft.weightGrams,
+        notes = draft.notes?.trim()?.takeIf { it.isNotBlank() },
+        createdAt = now,
+        updatedAt = now,
+        revision = 0L,
+        deletedAt = null,
+        originDeviceId = settings.deviceId,
+        pendingSync = true,
+      )
+    enqueueWeight(
+      entity = entity,
+      baseRevision = null,
+      action = "pet.weight.create",
+      payload =
+        buildJsonObject {
+          put("pet_id", entity.petId)
+          put("weight_grams", entity.weightGrams)
+          put("measured_at", entity.measuredAt)
+        },
+    )
+    return entity.toDomain()
+  }
+
+  suspend fun updateWeight(weightId: String, draft: PetWeightDraft): PetWeight {
+    draft.validate()?.let { error(it) }
+    val existing = weightDao.findById(weightId) ?: error("El peso ya no existe")
+    require(existing.deletedAt == null) { "El peso está archivado" }
+    val updated =
+      existing.copy(
+        measuredAt = ClinicTime.instantAtNoon(draft.measuredOn),
+        weightGrams = draft.weightGrams,
+        notes = draft.notes?.trim()?.takeIf { it.isNotBlank() },
+        updatedAt = System.currentTimeMillis(),
+        pendingSync = true,
+      )
+    enqueueWeight(
+      entity = updated,
+      baseRevision = existing.revision,
+      action = "pet.weight.update",
+      payload =
+        buildJsonObject {
+          put("pet_id", updated.petId)
+          put("weight_grams", updated.weightGrams)
+          put("measured_at", updated.measuredAt)
+        },
+    )
+    return updated.toDomain()
+  }
+
+  suspend fun deleteWeight(weightId: String) {    val existing = weightDao.findById(weightId) ?: return
+    if (existing.deletedAt != null) return
+    val now = System.currentTimeMillis()
+    val deleted = existing.copy(deletedAt = now, updatedAt = now, pendingSync = true)
+    enqueueWeight(
+      entity = deleted,
+      baseRevision = existing.revision,
+      action = "pet.weight.delete",
+      payload =
+        buildJsonObject {
+          put("pet_id", deleted.petId)
+          put("weight_grams", deleted.weightGrams)
+        },
+    )
+  }
+
+  suspend fun upsertWeightFromRemote(dto: PetWeightDto, clinicId: String) {
+    val existing = weightDao.findById(dto.id)
+    if (existing?.pendingSync == true) return
+    weightDao.upsert(dto.toEntity(clinicId, settings.deviceId))
+  }
+
+  suspend fun markWeightSynced(dto: PetWeightDto, clinicId: String) {
+    val existing = weightDao.findById(dto.id)
+    val entity = dto.toEntity(clinicId, existing?.originDeviceId ?: settings.deviceId)
+    weightDao.upsert(entity.copy(pendingSync = false))
+  }
+
+  private suspend fun enqueueWeight(
+    entity: PetWeightEntity,
+    baseRevision: Long?,
+    action: String,
+    payload: JsonObject,
+  ) {
+    val now = System.currentTimeMillis()
+    val outbox =
+      OutboxEntity(
+        operationId = UUID.randomUUID().toString(),
+        entityType = "pet_weight",
+        entityId = entity.id,
+        operation = "UPSERT",
+        payload = json.encodeToString(entity.toDto()),
+        baseRevision = baseRevision,
+        attempts = 0,
+        nextAttemptAt = 0L,
+        lastError = null,
+        createdAt = now,
+      )
+    database.withTransaction {
+      weightDao.upsert(entity)
+      outboxDao.insert(outbox)
+      auditRepository.record(
+        entity = "pet_weight",
+        entityId = entity.id,
+        action = action,
+        payload = payload,
+        clinicId = entity.clinicId,
+      )
+    }
+  }
+
   suspend fun createPet(
     clientId: String,
     petId: String,
     draft: PetDraft,
     fotoUrl: String?,
   ): Pet {
+    draft.validate()?.let { error(it) }
     val client = clientDao.findById(clientId) ?: error("Elegí un cliente válido")
     require(client.deletedAt == null) { "El cliente seleccionado está archivado" }
     val now = System.currentTimeMillis()
@@ -85,6 +218,16 @@ class PetRepository(
         pendingSync = true,
         clientId = client.id,
         status = draft.status.storage,
+        sex = draft.sex.storage.takeIf { draft.sex != PetSex.Unknown },
+        birthDate = draft.birthDate,
+        approxAgeMonths = draft.approxAgeMonths,
+        color = draft.color.clean(),
+        markings = draft.markings.clean(),
+        microchip = draft.microchip.clean(),
+        reproductiveStatus =
+          draft.reproductiveStatus.storage.takeIf { draft.reproductiveStatus != ReproductiveStatus.Unknown },
+        allergies = draft.allergies.clean(),
+        medicalNotes = draft.medicalNotes.clean(),
       )
     enqueueUpsert(
       entity = entity,
@@ -107,6 +250,7 @@ class PetRepository(
     fotoUrl: String? = null,
     removePhoto: Boolean = false,
   ): Pet {
+    draft.validate()?.let { error(it) }
     val existing = petDao.findById(petId) ?: error("La mascota ya no existe")
     val ownerName = existing.clientId?.let { clientDao.findById(it)?.name } ?: existing.ownerName
     val now = System.currentTimeMillis()
@@ -124,6 +268,16 @@ class PetRepository(
             else -> existing.fotoUrl
           },
         status = draft.status.storage,
+        sex = draft.sex.storage.takeIf { draft.sex != PetSex.Unknown },
+        birthDate = draft.birthDate,
+        approxAgeMonths = draft.approxAgeMonths,
+        color = draft.color.clean(),
+        markings = draft.markings.clean(),
+        microchip = draft.microchip.clean(),
+        reproductiveStatus =
+          draft.reproductiveStatus.storage.takeIf { draft.reproductiveStatus != ReproductiveStatus.Unknown },
+        allergies = draft.allergies.clean(),
+        medicalNotes = draft.medicalNotes.clean(),
         updatedAt = now,
         pendingSync = true,
       )
@@ -135,6 +289,15 @@ class PetRepository(
         if (existing.notes != updated.notes) add("notas")
         if (existing.fotoUrl != updated.fotoUrl) add("foto")
         if (existing.status != updated.status) add("estado")
+        if (existing.sex != updated.sex) add("sexo")
+        if (existing.birthDate != updated.birthDate) add("nacimiento")
+        if (existing.approxAgeMonths != updated.approxAgeMonths) add("edad")
+        if (existing.color != updated.color) add("color")
+        if (existing.markings != updated.markings) add("señas")
+        if (existing.microchip != updated.microchip) add("microchip")
+        if (existing.reproductiveStatus != updated.reproductiveStatus) add("estado reproductivo")
+        if (existing.allergies != updated.allergies) add("alergias")
+        if (existing.medicalNotes != updated.medicalNotes) add("antecedentes")
       }
     enqueueUpsert(
       entity = updated,
@@ -309,4 +472,6 @@ class PetRepository(
 
   private fun PetEntity.toDomain(clients: Map<String, String>): Pet =
     toDomain().copy(ownerName = clientId?.let { clients[it] } ?: ownerName)
+
+  private fun String?.clean(): String? = this?.trim()?.takeIf { it.isNotBlank() }
 }

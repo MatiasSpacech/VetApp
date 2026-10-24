@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.veterapp.domain.ClinicTime
 import com.veterapp.domain.ConsultationDraft
+import com.veterapp.ui.common.AppFormSheet
 import com.veterapp.ui.common.DateField
 import com.veterapp.util.userMessage
 
@@ -79,15 +80,15 @@ fun ConsultationFormDialog(
     }
   }
 
-  AlertDialog(
-    onDismissRequest = { if (!busy) onDismiss() },
-    title = { Text("Nueva consulta") },
-    text = {
-      Column(
-        modifier = Modifier.verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-      ) {
-        DateField(
+  AppFormSheet(
+    title = "Nueva consulta",
+    subtitle = "La consulta queda cerrada al guardar. Las correcciones se hacen con addendum.",
+    confirmLabel = "Guardar consulta",
+    onConfirm = ::save,
+    onDismiss = onDismiss,
+    busy = busy,
+    dirty = false,
+  ) {        DateField(
           label = "Fecha",
           epochDay = consultedOn,
           onChange = { consultedOn = it },
@@ -157,15 +158,7 @@ fun ConsultationFormDialog(
             Text("Guardando…", style = MaterialTheme.typography.bodySmall)
           }
         }
-      }
-    },
-    confirmButton = {
-      TextButton(onClick = ::save, enabled = !busy) {
-        Text(if (busy) "Guardando…" else "Guardar")
-      }
-    },
-    dismissButton = {
-      TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancelar") }
-    },
-  )
+
+  }
+
 }

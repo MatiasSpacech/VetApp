@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.veterapp.domain.Vaccination
+import com.veterapp.ui.common.AppFormSheet
 import com.veterapp.ui.common.DateField
 import com.veterapp.ui.common.formatEpochDay
 import com.veterapp.util.userMessage
@@ -55,12 +56,15 @@ fun RescheduleDialog(
     }
   }
 
-  AlertDialog(
-    onDismissRequest = { if (!busy) onDismiss() },
-    title = { Text("Reprogramar próxima dosis") },
-    text = {
-      Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
+  AppFormSheet(
+    title = "Reprogramar próxima dosis",
+    subtitle = "El cambio queda auditado.",
+    confirmLabel = "Reprogramar",
+    onConfirm = ::save,
+    onDismiss = onDismiss,
+    busy = busy,
+    dirty = false,
+  ) {        Text(
           "${vaccination.vaccineName} · aplicada el ${formatEpochDay(vaccination.appliedOn)}",
           style = MaterialTheme.typography.bodySmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -90,15 +94,7 @@ fun RescheduleDialog(
             Text("Guardando…", style = MaterialTheme.typography.bodySmall)
           }
         }
-      }
-    },
-    confirmButton = {
-      TextButton(onClick = ::save, enabled = !busy) {
-        Text(if (busy) "Guardando…" else "Reprogramar")
-      }
-    },
-    dismissButton = {
-      TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancelar") }
-    },
-  )
+
+  }
+
 }

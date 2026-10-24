@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -38,6 +39,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -46,6 +49,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.veterapp.security.BiometricUnlock
+import com.veterapp.ui.common.AppIcons
+import com.veterapp.ui.common.BrandMark
 import com.veterapp.security.SecurityRepository
 import com.veterapp.security.findFragmentActivity
 import kotlinx.coroutines.launch
@@ -135,9 +140,19 @@ private fun LockScreen(securityRepository: SecurityRepository) {
 
   BackHandler(enabled = true) {}
 
-  Surface(
-    modifier = Modifier.fillMaxSize(),
-    color = MaterialTheme.colorScheme.background,
+  Box(
+    modifier =
+      Modifier
+        .fillMaxSize()
+        .background(
+          Brush.verticalGradient(
+            listOf(
+              MaterialTheme.colorScheme.background,
+              MaterialTheme.colorScheme.surfaceContainerHigh,
+              MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
+            ),
+          ),
+        ),
   ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
       Column(
@@ -146,69 +161,87 @@ private fun LockScreen(securityRepository: SecurityRepository) {
             .fillMaxWidth()
             .heightIn(min = maxHeight)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 32.dp),
+            .padding(horizontal = 28.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
       ) {
+        BrandMark(size = 76.dp)
+        Spacer(Modifier.height(16.dp))
         Text(
           "VeterApp",
           style = MaterialTheme.typography.headlineLarge,
           fontWeight = FontWeight.Bold,
-          color = MaterialTheme.colorScheme.primary,
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
         Text(
-          "App bloqueada",
-          style = MaterialTheme.typography.titleMedium,
+          "Desbloqueá para continuar",
+          style = MaterialTheme.typography.bodyMedium,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(28.dp))
-        PinDots(entered = pin.length, total = pinLength)
-        Spacer(Modifier.height(16.dp))
-        error?.let {
-          Text(
-            it,
-            color = MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-          )
-          Spacer(Modifier.height(8.dp))
-        }
-        if (verifying) {
-          CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-          Spacer(Modifier.height(8.dp))
-        }
-        Spacer(Modifier.height(8.dp))
-        PinKeypad(
-          enabled = !verifying,
-          onDigit = { digit ->
-            if (pin.length < pinLength) {
-              pin += digit
-              error = null
+        Spacer(Modifier.height(24.dp))
+        Surface(
+          shape = RoundedCornerShape(28.dp),
+          color = MaterialTheme.colorScheme.surface,
+          shadowElevation = 6.dp,
+        ) {
+          Column(
+            modifier = Modifier.padding(horizontal = 22.dp, vertical = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+          ) {
+            PinDots(entered = pin.length, total = pinLength)
+            Spacer(Modifier.height(14.dp))
+            error?.let {
+              Text(
+                it,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center,
+              )
+              Spacer(Modifier.height(8.dp))
             }
-          },
-          onBackspace = {
-            pin = pin.dropLast(1)
-            error = null
-          },
-          onUnlock = ::submit,
-          unlockEnabled = pin.isNotBlank() && !verifying,
-        )
-        if (state.biometricEnabled && biometricAvailable) {
-          Spacer(Modifier.height(12.dp))
-          TextButton(onClick = ::promptBiometric, enabled = !verifying) {
-            Text("Usar biometría")
+            if (verifying) {
+              CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+              Spacer(Modifier.height(8.dp))
+            }
+            Spacer(Modifier.height(6.dp))
+            PinKeypad(
+              enabled = !verifying,
+              onDigit = { digit ->
+                if (pin.length < pinLength) {
+                  pin += digit
+                  error = null
+                }
+              },
+              onBackspace = {
+                pin = pin.dropLast(1)
+                error = null
+              },
+              onUnlock = ::submit,
+              unlockEnabled = pin.isNotBlank() && !verifying,
+            )
+            if (state.biometricEnabled && biometricAvailable) {
+              Spacer(Modifier.height(10.dp))
+              TextButton(onClick = ::promptBiometric, enabled = !verifying) {
+                Icon(
+                  painter = painterResource(AppIcons.Fingerprint),
+                  contentDescription = null,
+                  modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Usar biometría")
+              }
+            } else if (state.biometricEnabled && !biometricAvailable) {
+              Spacer(Modifier.height(10.dp))
+              Text(
+                "La biometría no está disponible en este dispositivo.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+              )
+            }
           }
-        } else if (state.biometricEnabled && !biometricAvailable) {
-          Spacer(Modifier.height(12.dp))
-          Text(
-            "La biometría no está disponible en este dispositivo.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-          )
         }
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(16.dp))
         Text(
           "PIN de $pinLength dígitos",
           style = MaterialTheme.typography.bodySmall,
@@ -218,7 +251,6 @@ private fun LockScreen(securityRepository: SecurityRepository) {
     }
   }
 }
-
 @Composable
 private fun PinDots(entered: Int, total: Int) {
   Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -226,11 +258,11 @@ private fun PinDots(entered: Int, total: Int) {
       Box(
         modifier =
           Modifier
-            .size(14.dp)
+            .size(16.dp)
             .clip(CircleShape)
             .background(
               if (index < entered) MaterialTheme.colorScheme.primary
-              else MaterialTheme.colorScheme.surfaceVariant,
+              else MaterialTheme.colorScheme.surfaceContainerHigh,
             ),
       )
     }
@@ -255,7 +287,7 @@ private fun PinKeypad(
       }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-      PinKey("←", enabled, onClick = onBackspace)
+      PinKey("⌫", enabled, onClick = onBackspace)
       PinKey("0", enabled) { onDigit("0") }
       Box(modifier = Modifier.size(72.dp), contentAlignment = Alignment.Center) {
         Button(
@@ -264,7 +296,11 @@ private fun PinKeypad(
           modifier = Modifier.size(72.dp),
           shape = RoundedCornerShape(20.dp),
         ) {
-          Text("OK", fontWeight = FontWeight.Bold)
+          Icon(
+            painter = painterResource(AppIcons.Check),
+            contentDescription = "Desbloquear",
+            modifier = Modifier.size(26.dp),
+          )
         }
       }
     }
@@ -277,12 +313,21 @@ private fun PinKey(
   enabled: Boolean,
   onClick: () -> Unit,
 ) {
-  TextButton(
+  Surface(
     onClick = onClick,
     enabled = enabled,
     modifier = Modifier.size(72.dp),
     shape = RoundedCornerShape(20.dp),
+    color = MaterialTheme.colorScheme.surfaceContainerLow,
+    contentColor = MaterialTheme.colorScheme.onSurface,
+    border =
+      androidx.compose.foundation.BorderStroke(
+        1.dp,
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f),
+      ),
   ) {
-    Text(label, style = MaterialTheme.typography.headlineSmall)
+    Box(contentAlignment = Alignment.Center) {
+      Text(label, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Medium)
+    }
   }
 }

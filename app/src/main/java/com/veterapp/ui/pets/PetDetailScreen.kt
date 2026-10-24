@@ -1,6 +1,5 @@
 package com.veterapp.ui.pets
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +10,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -39,23 +42,41 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.veterapp.domain.Appointment
 import com.veterapp.domain.Client
 import com.veterapp.domain.Consultation
 import com.veterapp.domain.Pet
 import com.veterapp.domain.PetOwnerHistory
 import com.veterapp.domain.PetStatus
+import com.veterapp.domain.PetWeight
 import com.veterapp.domain.Vaccination
+import com.veterapp.domain.buildWhatsAppUrl
+import com.veterapp.domain.formatBirthDate
+import com.veterapp.domain.formatWeight
+import com.veterapp.ui.appointments.AppointmentDetailDialog
+import com.veterapp.ui.appointments.AppointmentFormDialog
+import com.veterapp.ui.appointments.AppointmentsViewModel
 import com.veterapp.ui.clinical.AddendumDialog
 import com.veterapp.ui.clinical.ClinicalHistoryTab
 import com.veterapp.ui.clinical.ClinicalViewModel
 import com.veterapp.ui.clinical.ConsultationFormDialog
 import com.veterapp.ui.clients.ClientPickerDialog
 import com.veterapp.ui.clients.ClientsViewModel
+import com.veterapp.ui.common.AppointmentStatusChip
+import com.veterapp.theme.extendedColors
+import com.veterapp.ui.common.AppBackTopBar
+import com.veterapp.ui.common.AppCard
+import com.veterapp.ui.common.MiniLineChart
+import com.veterapp.ui.common.AppIcons
+import com.veterapp.ui.common.StatusPill
 import com.veterapp.ui.common.PetStatusChip
 import com.veterapp.ui.common.formatDate
+import com.veterapp.ui.common.formatDateTime
+import com.veterapp.ui.common.formatTimeRange
 import com.veterapp.ui.vaccines.RescheduleDialog
 import com.veterapp.ui.vaccines.VaccinationFormDialog
 import com.veterapp.ui.vaccines.VaccinationPrefill
@@ -67,6 +88,8 @@ private enum class PetDetailTab(val label: String) {
   Summary("Resumen"),
   Clinical("Historia"),
   Vaccines("Vacunas"),
+  Appointments("Turnos"),
+  Weight("Peso"),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -76,6 +99,7 @@ fun PetDetailScreen(
   clientsViewModel: ClientsViewModel,
   petsViewModel: PetsViewModel,
   clinicalViewModel: ClinicalViewModel,
+  appointmentsViewModel: AppointmentsViewModel,
   onBack: () -> Unit,
   onOpenClient: (String) -> Unit,
   modifier: Modifier = Modifier,
@@ -88,6 +112,10 @@ fun PetDetailScreen(
   val addenda by clinicalViewModel.observeAddenda(petId)
     .collectAsStateWithLifecycle(initialValue = emptyList())
   val vaccinations by clinicalViewModel.observeVaccinations(petId)
+    .collectAsStateWithLifecycle(initialValue = emptyList())
+  val weights by petsViewModel.observeWeights(petId)
+    .collectAsStateWithLifecycle(initialValue = emptyList())
+  val appointments by appointmentsViewModel.observeForPet(petId)
     .collectAsStateWithLifecycle(initialValue = emptyList())
   val clients by clientsViewModel.clients.collectAsStateWithLifecycle()
   val online by petsViewModel.online.collectAsStateWithLifecycle()
@@ -106,6 +134,11 @@ fun PetDetailScreen(
   var showVaccinationForm by remember { mutableStateOf(false) }
   var vaccinationPrefill by remember { mutableStateOf<VaccinationPrefill?>(null) }
   var rescheduleFor by remember { mutableStateOf<Vaccination?>(null) }
+  var showWeightForm by remember { mutableStateOf(false) }
+  var editingWeight by remember { mutableStateOf<PetWeight?>(null) }
+  var selectedAppointment by remember { mutableStateOf<Appointment?>(null) }
+  var editingAppointment by remember { mutableStateOf<Appointment?>(null) }
+  val context = LocalContext.current
 
   fun message(text: String) {
     scope.launch { snackbar.showSnackbar(text) }
@@ -114,9 +147,10 @@ fun PetDetailScreen(
   Scaffold(
     modifier = modifier.fillMaxSize(),
     topBar = {
-      TopAppBar(
-        title = { Text(pet?.name ?: "Ficha de la mascota") },
-        navigationIcon = { TextButton(onClick = onBack) { Text("Volver") } },
+      AppBackTopBar(
+        title = pet?.name ?: "Ficha de la mascota",
+        subtitle = pet?.subtitle,
+        onBack = onBack,
       )
     },
     snackbarHost = { SnackbarHost(snackbar) },
@@ -194,6 +228,31 @@ fun PetDetailScreen(
               showVaccinationForm = true
             },
             onReschedule = { rescheduleFor = it },
+            modifier = Modifier.weight(1f),
+          )
+        PetDetailTab.Appointments ->
+          PetAppointmentsTab(
+            appointments = appointments,
+            onOpen = { selectedAppointment = it },
+            modifier = Modifier.weight(1f),
+          )
+        PetDetailTab.Weight ->
+          PetWeightTab(
+            pet = current,
+            weights = weights,
+            onAdd = {
+              editingWeight = null
+              showWeightForm = true
+            },
+            onEdit = { weight ->
+              editingWeight = weight
+              showWeightForm = true
+            },
+            onDelete = { weight ->
+              petsViewModel.deleteWeight(weight.id) { result ->
+                result.onFailure { message(it.userMessage("No se pudo borrar el peso")) }
+              }
+            },
             modifier = Modifier.weight(1f),
           )
       }
@@ -361,6 +420,84 @@ fun PetDetailScreen(
       onDismiss = { rescheduleFor = null },
     )
   }
+
+  if (showWeightForm && pet != null) {
+    val editing = editingWeight
+    WeightFormDialog(
+      weight = editing,
+      onSave = { draft, onResult ->
+        if (editing == null) {
+          petsViewModel.addWeight(pet!!.id, draft) { result ->
+            onResult(result.map { Unit })
+          }
+        } else {
+          petsViewModel.updateWeight(editing.id, draft) { result ->
+            onResult(result.map { Unit })
+          }
+        }
+      },
+      onDismiss = {
+        showWeightForm = false
+        editingWeight = null
+      },
+    )
+  }
+
+  selectedAppointment?.let { appointment ->
+    AppointmentDetailDialog(
+      appointment = appointment,
+      onDismiss = { selectedAppointment = null },
+      onConfirm = {
+        appointmentsViewModel.confirm(appointment.id) { result ->
+          result.onFailure { message(it.userMessage("No se pudo confirmar el turno")) }
+        }
+        selectedAppointment = null
+      },
+      onCancel = { reason ->
+        appointmentsViewModel.cancel(appointment.id, reason) { result ->
+          result.onFailure { message(it.userMessage("No se pudo cancelar el turno")) }
+        }
+        selectedAppointment = null
+      },
+      onNoShow = {
+        appointmentsViewModel.markNoShow(appointment.id) { result ->
+          result.onFailure { message(it.userMessage("No se pudo marcar el turno")) }
+        }
+        selectedAppointment = null
+      },
+      onAttend = {
+        message("Para atender el turno, abrí la agenda y usá Atender.")
+        selectedAppointment = null
+      },
+      onEdit = {
+        editingAppointment = appointment
+        selectedAppointment = null
+      },
+      onOpenPet = { selectedAppointment = null },
+      onWhatsApp = {
+        buildWhatsAppUrl(appointment)?.let { url ->
+          runCatching {
+            context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+          }
+        } ?: message("El cliente no tiene un teléfono válido")
+      },
+    )
+  }
+
+  editingAppointment?.let { appointment ->
+    val currentPet = pet
+    if (currentPet != null) {
+      AppointmentFormDialog(
+        appointment = appointment,
+        pets = listOf(currentPet),
+        defaultDurationMinutes = appointmentsViewModel.defaultDurationMinutes(),
+        onSave = { draft, force, onResult ->
+          appointmentsViewModel.update(appointment.id, draft, force, onResult)
+        },
+        onDismiss = { editingAppointment = null },
+      )
+    }
+  }
 }
 
 @Composable
@@ -392,6 +529,7 @@ private fun PetSummaryTab(
       onChangeOwner = onChangeOwner,
     )
     StatusCard(pet = pet, busy = statusBusy, onChange = onChangeStatus)
+    ClinicalDataCard(pet)
     if (!pet.notes.isNullOrBlank()) {
       Card(
         modifier = Modifier.fillMaxWidth(),
@@ -435,28 +573,38 @@ private fun PetSummaryTab(
 
 @Composable
 private fun PetHeader(pet: Pet) {
-  Card(modifier = Modifier.fillMaxWidth()) {
-    Row(
-      modifier = Modifier.padding(16.dp),
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
-      PetPhoto(pet = pet, size = 88.dp)
+  AppCard(contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+      PetPhoto(pet = pet, size = 96.dp)
       Spacer(Modifier.width(14.dp))
-      Column(Modifier.weight(1f)) {
+      Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
           pet.name,
           style = MaterialTheme.typography.headlineSmall,
-          fontWeight = FontWeight.SemiBold,
+          fontWeight = FontWeight.Bold,
         )
-        Text(pet.subtitle, style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.height(6.dp))
-        PetStatusChip(pet.status)
+        Text(
+          pet.subtitle,
+          style = MaterialTheme.typography.bodyMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+          PetStatusChip(pet.status)
+          pet.ageLabel?.let {
+            StatusPill(
+              label = it,
+              icon = AppIcons.Cake,
+              container = MaterialTheme.colorScheme.primaryContainer,
+              contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+          }
+        }
         if (pet.pendingSync) {
-          Spacer(Modifier.height(4.dp))
-          Text(
-            "Pendiente de sincronizar",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.tertiary,
+          StatusPill(
+            label = "Pendiente de sincronizar",
+            icon = AppIcons.Sync,
+            container = MaterialTheme.extendedColors.warningContainer,
+            contentColor = MaterialTheme.extendedColors.onWarningContainer,
           )
         }
       }
@@ -471,10 +619,7 @@ private fun OwnerCard(
   onOpenClient: () -> Unit,
   onChangeOwner: () -> Unit,
 ) {
-  Card(
-    modifier = Modifier.fillMaxWidth(),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-  ) {
+  AppCard {
     Column(
       modifier = Modifier.padding(16.dp),
       verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -509,10 +654,7 @@ private fun OwnerCard(
 
 @Composable
 private fun StatusCard(pet: Pet, busy: Boolean, onChange: (PetStatus) -> Unit) {
-  Card(
-    modifier = Modifier.fillMaxWidth(),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-  ) {
+  AppCard {
     Column(
       modifier = Modifier.padding(16.dp),
       verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -537,10 +679,7 @@ private fun StatusCard(pet: Pet, busy: Boolean, onChange: (PetStatus) -> Unit) {
 
 @Composable
 private fun OwnerHistoryRow(item: PetOwnerHistory) {
-  Card(
-    modifier = Modifier.fillMaxWidth(),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-  ) {
+AppCard {
     Column(Modifier.padding(12.dp)) {
       Text(
         "${item.previousOwnerName} → ${item.newOwnerName}",
@@ -556,5 +695,159 @@ private fun OwnerHistoryRow(item: PetOwnerHistory) {
         Text(it, style = MaterialTheme.typography.bodySmall)
       }
     }
+  }
+}
+
+@Composable
+private fun ClinicalDataCard(pet: Pet) {
+  val rows =
+    listOfNotNull(
+      pet.birthDateValue?.let { "Nacimiento" to formatBirthDate(pet.birthDate).orEmpty() },
+      pet.ageLabel?.let { "Edad" to it },
+      "Sexo" to pet.sex.label,
+      "Estado reproductivo" to pet.reproductiveStatus.label,
+      pet.color?.let { "Color" to it },
+      pet.markings?.let { "Señas" to it },
+      pet.microchip?.let { "Microchip" to it },
+      pet.allergies?.let { "Alergias" to it },
+      pet.medicalNotes?.let { "Antecedentes" to it },
+    )
+  if (rows.isEmpty()) return
+  AppCard {
+    Column(
+      modifier = Modifier.padding(16.dp),
+      verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+      Text("Datos clínicos", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+      rows.forEach { (label, value) ->
+        Row {
+          Text("$label: ", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+          Text(value, style = MaterialTheme.typography.bodyMedium)
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun PetAppointmentsTab(
+  appointments: List<Appointment>,
+  onOpen: (Appointment) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  if (appointments.isEmpty()) {
+    Box(modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+      Text(
+        "Esta mascota no tiene turnos registrados.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+    }
+    return
+  }
+  LazyColumn(
+    modifier = modifier.fillMaxSize().padding(16.dp),
+    verticalArrangement = Arrangement.spacedBy(8.dp),
+  ) {
+    items(appointments, key = { it.id }) { appointment ->
+      AppCard(contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+              "${formatDate(appointment.startsAt)} · ${formatTimeRange(appointment.startsAt, appointment.endsAt)}",
+              style = MaterialTheme.typography.titleSmall,
+              modifier = Modifier.weight(1f),
+            )
+            AppointmentStatusChip(appointment.status)
+          }
+          Text(appointment.reason, style = MaterialTheme.typography.bodyMedium)
+          if (appointment.notes != null) {
+            Text(
+              appointment.notes,
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
+          TextButton(onClick = { onOpen(appointment) }, modifier = Modifier.align(Alignment.End)) {
+            Text("Abrir")
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun PetWeightTab(
+  pet: Pet,
+  weights: List<PetWeight>,
+  onAdd: () -> Unit,
+  onEdit: (PetWeight) -> Unit,
+  onDelete: (PetWeight) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  Column(
+    modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+    verticalArrangement = Arrangement.spacedBy(10.dp),
+  ) {
+    Text("Peso y evolución", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+    Text(
+      "El peso se guarda en gramos y la fecha en la zona America/Argentina/Buenos_Aires.",
+      style = MaterialTheme.typography.bodySmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    OutlinedButton(onClick = onAdd) { Text("Registrar peso") }
+    if (weights.isEmpty()) {
+      Text(
+        "Todavía no hay mediciones de peso.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+    } else {
+      WeightEvolutionChart(weights.take(12).reversed())
+      weights.forEach { weight ->
+        AppCard(contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp)) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+              Text(formatWeight(weight.weightGrams), style = MaterialTheme.typography.titleSmall)
+              Text(
+                formatDateTime(weight.measuredAt),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+              weight.notes?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            }
+            TextButton(onClick = { onEdit(weight) }) { Text("Editar") }
+            TextButton(onClick = { onDelete(weight) }) {
+              Text("Borrar", color = MaterialTheme.colorScheme.error)
+            }
+          }
+        }
+      }
+    }
+    Spacer(Modifier.height(24.dp))
+  }
+}
+
+@Composable
+private fun WeightEvolutionChart(weights: List<PetWeight>) {
+  if (weights.size < 2) return
+  AppCard(contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp)) {
+    Text(
+      "Evolución de peso",
+      style = MaterialTheme.typography.titleSmall,
+      fontWeight = FontWeight.SemiBold,
+    )
+    Text(
+      "Últimas ${weights.size} mediciones",
+      style = MaterialTheme.typography.bodySmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(8.dp))
+    MiniLineChart(
+      values = weights.map { it.weightGrams.toFloat() },
+      color = MaterialTheme.colorScheme.secondary,
+      height = 120.dp,
+    )
   }
 }

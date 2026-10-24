@@ -17,3 +17,5 @@ supabase/.env
 *.keystore
 keystore.properties
 *.log
+
+/screenshots/

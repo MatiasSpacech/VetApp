@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import com.veterapp.domain.ClinicTime
 import com.veterapp.domain.VaccinationDraft
 import com.veterapp.domain.VaccinationSchedule
+import com.veterapp.ui.common.AppFormSheet
 import com.veterapp.ui.common.DateField
 import com.veterapp.util.userMessage
 
@@ -78,15 +79,15 @@ fun VaccinationFormDialog(
     }
   }
 
-  AlertDialog(
-    onDismissRequest = { if (!busy) onDismiss() },
-    title = { Text(if (prefill == null) "Registrar vacuna" else "Aplicar dosis") },
-    text = {
-      Column(
-        modifier = Modifier.verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-      ) {
-        OutlinedTextField(
+  AppFormSheet(
+    title = if (prefill == null) "Registrar vacuna" else "Aplicar dosis",
+    subtitle = "La fecha de la próxima dosis es una ayuda, no reemplaza el criterio clínico.",
+    confirmLabel = "Guardar vacunación",
+    onConfirm = ::save,
+    onDismiss = onDismiss,
+    busy = busy,
+    dirty = false,
+  ) {        OutlinedTextField(
           value = vaccineName,
           onValueChange = { vaccineName = it },
           label = { Text("Vacuna *") },
@@ -153,15 +154,7 @@ fun VaccinationFormDialog(
             Text("Guardando…", style = MaterialTheme.typography.bodySmall)
           }
         }
-      }
-    },
-    confirmButton = {
-      TextButton(onClick = ::save, enabled = !busy) {
-        Text(if (busy) "Guardando…" else "Guardar")
-      }
-    },
-    dismissButton = {
-      TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancelar") }
-    },
-  )
+
+  }
+
 }

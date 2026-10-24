@@ -35,6 +35,42 @@ interface AppointmentDao {
       "FROM appointments a " +
       "INNER JOIN pets p ON p.id = a.petId " +
       "LEFT JOIN clients c ON c.id = p.clientId " +
+      "WHERE a.deletedAt IS NULL AND p.deletedAt IS NULL " +
+      "AND a.startsAt >= :from AND a.startsAt < :to " +
+      "ORDER BY a.startsAt ASC",
+  )
+  suspend fun between(from: Long, to: Long): List<AppointmentWithPet>
+
+  @Query(
+    "SELECT a.*, p.name AS petName, p.status AS petStatus, " +
+      "COALESCE(c.name, p.ownerName) AS ownerName, c.phone AS ownerPhone " +
+      "FROM appointments a " +
+      "INNER JOIN pets p ON p.id = a.petId " +
+      "LEFT JOIN clients c ON c.id = p.clientId " +
+      "WHERE a.deletedAt IS NULL AND p.deletedAt IS NULL " +
+      "AND a.petId = :petId AND a.startsAt >= :from " +
+      "ORDER BY a.startsAt ASC",
+  )
+  fun observeForPetFrom(petId: String, from: Long): Flow<List<AppointmentWithPet>>
+
+  @Query(
+    "SELECT a.*, p.name AS petName, p.status AS petStatus, " +
+      "COALESCE(c.name, p.ownerName) AS ownerName, c.phone AS ownerPhone " +
+      "FROM appointments a " +
+      "INNER JOIN pets p ON p.id = a.petId " +
+      "LEFT JOIN clients c ON c.id = p.clientId " +
+      "WHERE a.deletedAt IS NULL AND p.deletedAt IS NULL " +
+      "AND p.clientId = :clientId AND a.startsAt >= :from " +
+      "ORDER BY a.startsAt ASC",
+  )
+  fun observeForClientFrom(clientId: String, from: Long): Flow<List<AppointmentWithPet>>
+
+  @Query(
+    "SELECT a.*, p.name AS petName, p.status AS petStatus, " +
+      "COALESCE(c.name, p.ownerName) AS ownerName, c.phone AS ownerPhone " +
+      "FROM appointments a " +
+      "INNER JOIN pets p ON p.id = a.petId " +
+      "LEFT JOIN clients c ON c.id = p.clientId " +
       "WHERE a.id = :id AND a.deletedAt IS NULL LIMIT 1",
   )
   suspend fun findByIdWithPet(id: String): AppointmentWithPet?

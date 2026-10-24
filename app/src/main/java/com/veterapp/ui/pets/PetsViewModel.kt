@@ -8,6 +8,8 @@ import com.veterapp.domain.Pet
 import com.veterapp.domain.PetDraft
 import com.veterapp.domain.PetOwnerHistory
 import com.veterapp.domain.PetStatus
+import com.veterapp.domain.PetWeight
+import com.veterapp.domain.PetWeightDraft
 import com.veterapp.photo.CompressedPhoto
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
@@ -31,6 +33,45 @@ class PetsViewModel(private val container: AppContainer) : ViewModel() {
 
   fun observeOwnerHistory(petId: String): Flow<List<PetOwnerHistory>> =
     container.petRepository.observeOwnerHistory(petId)
+
+  fun observeWeights(petId: String): Flow<List<PetWeight>> =
+    container.petRepository.observeWeights(petId)
+
+  fun addWeight(petId: String, draft: PetWeightDraft, onResult: (Result<PetWeight>) -> Unit) {
+    viewModelScope.launch {
+      runCatching { container.petRepository.addWeight(petId, draft) }
+        .onSuccess { container.syncScheduler.requestSync() }
+        .fold(
+          onSuccess = { onResult(Result.success(it)) },
+          onFailure = { onResult(Result.failure(it)) },
+        )
+    }
+  }
+
+  fun updateWeight(
+    weightId: String,
+    draft: PetWeightDraft,
+    onResult: (Result<PetWeight>) -> Unit,
+  ) {
+    viewModelScope.launch {
+      runCatching { container.petRepository.updateWeight(weightId, draft) }
+        .onSuccess { container.syncScheduler.requestSync() }
+        .fold(
+          onSuccess = { onResult(Result.success(it)) },
+          onFailure = { onResult(Result.failure(it)) },
+        )
+    }
+  }
+
+  fun deleteWeight(weightId: String, onResult: (Result<Unit>) -> Unit) {    viewModelScope.launch {
+      runCatching { container.petRepository.deleteWeight(weightId) }
+        .onSuccess { container.syncScheduler.requestSync() }
+        .fold(
+          onSuccess = { onResult(Result.success(Unit)) },
+          onFailure = { onResult(Result.failure(it)) },
+        )
+    }
+  }
 
   fun createPet(
     clientId: String,

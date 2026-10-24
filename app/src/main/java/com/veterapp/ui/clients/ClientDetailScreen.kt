@@ -38,7 +38,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.graphics.Brush
+import com.veterapp.theme.extendedColors
+import com.veterapp.ui.common.AppBackTopBar
+import com.veterapp.ui.common.AppCard
+import com.veterapp.ui.common.AppIcons
+import com.veterapp.ui.common.StatusPill
+import com.veterapp.domain.Appointment
 import com.veterapp.domain.Client
+import com.veterapp.ui.appointments.AppointmentsViewModel
+import com.veterapp.ui.common.AppointmentStatusChip
+import com.veterapp.ui.common.formatDate
+import com.veterapp.ui.common.formatTimeRange
 import com.veterapp.ui.pets.PetCard
 import com.veterapp.ui.pets.PetFormDialog
 import com.veterapp.ui.pets.PetsViewModel
@@ -51,6 +62,7 @@ fun ClientDetailScreen(
   clientId: String,
   clientsViewModel: ClientsViewModel,
   petsViewModel: PetsViewModel,
+  appointmentsViewModel: AppointmentsViewModel,
   onBack: () -> Unit,
   onOpenPet: (String) -> Unit,
   modifier: Modifier = Modifier,
@@ -58,12 +70,15 @@ fun ClientDetailScreen(
   val client by clientsViewModel.observeClient(clientId).collectAsStateWithLifecycle(initialValue = null)
   val allClients by clientsViewModel.clients.collectAsStateWithLifecycle()
   val pets by petsViewModel.observePetsForClient(clientId).collectAsStateWithLifecycle(initialValue = emptyList())
+  val appointments by appointmentsViewModel.observeForClient(clientId)
+    .collectAsStateWithLifecycle(initialValue = emptyList())
   val online by petsViewModel.online.collectAsStateWithLifecycle()
   val snackbar = remember { SnackbarHostState() }
   val scope = rememberCoroutineScope()
   var showEdit by remember { mutableStateOf(false) }
   var showAddPet by remember { mutableStateOf(false) }
   var showArchive by remember { mutableStateOf(false) }
+  var selectedAppointment by remember { mutableStateOf<Appointment?>(null) }
 
   fun message(text: String) {
     scope.launch { snackbar.showSnackbar(text) }
@@ -72,10 +87,7 @@ fun ClientDetailScreen(
   Scaffold(
     modifier = modifier.fillMaxSize(),
     topBar = {
-      TopAppBar(
-        title = { Text("Ficha del cliente") },
-        navigationIcon = { TextButton(onClick = onBack) { Text("Volver") } },
-      )
+      AppBackTopBar(title = "Ficha del cliente", onBack = onBack)
     },
     snackbarHost = { SnackbarHost(snackbar) },
   ) { padding ->
@@ -129,6 +141,11 @@ fun ClientDetailScreen(
       TextButton(onClick = { showArchive = true }) {
         Text("Archivar cliente", color = MaterialTheme.colorScheme.error)
       }
+
+      AppointmentsCard(
+        appointments = appointments,
+        onOpen = { selectedAppointment = it },
+      )
 
       Text(
         "Mascotas (${pets.size})",
@@ -210,35 +227,107 @@ fun ClientDetailScreen(
       },
     )
   }
+
+  selectedAppointment?.let { appointment ->
+    AlertDialog(
+      onDismissRequest = { selectedAppointment = null },
+      title = { Text(appointment.petName) },
+      text = {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          AppointmentStatusChip(appointment.status)
+          Text(
+            "${formatDate(appointment.startsAt)} · ${formatTimeRange(appointment.startsAt, appointment.endsAt)}",
+            style = MaterialTheme.typography.titleSmall,
+          )
+          Text("Motivo: ${appointment.reason}", style = MaterialTheme.typography.bodyMedium)
+          appointment.notes?.let { Text("Notas: $it", style = MaterialTheme.typography.bodySmall) }
+          Text(
+            "Para gestionar el turno, abrí la agenda.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+      },
+      confirmButton = {
+        TextButton(onClick = { selectedAppointment = null }) { Text("Cerrar") }
+      },
+    )
+  }
+}
+
+@Composable
+private fun AppointmentsCard(
+  appointments: List<Appointment>,
+  onOpen: (Appointment) -> Unit,
+) {
+  AppCard {
+    Column(
+      modifier = Modifier.padding(16.dp),
+      verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+      Text("Turnos", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+      if (appointments.isEmpty()) {
+        Text(
+          "Este cliente no tiene turnos registrados.",
+          style = MaterialTheme.typography.bodyMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      } else {
+        appointments.forEach { appointment ->
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+              Text(
+                "${formatDate(appointment.startsAt)} · ${appointment.petName}",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+              )
+              Text(
+                appointment.reason,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            }
+            AppointmentStatusChip(appointment.status)
+            TextButton(onClick = { onOpen(appointment) }) { Text("Ver") }
+          }
+        }
+      }
+    }
+  }
 }
 
 @Composable
 private fun ClientHeader(client: Client) {
-  Card(modifier = Modifier.fillMaxWidth()) {
-    Row(
-      modifier = Modifier.padding(16.dp),
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
+  AppCard(contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
       Box(
         modifier =
           Modifier
-            .size(64.dp)
-            .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape),
+            .size(72.dp)
+            .background(
+              Brush.linearGradient(
+                listOf(
+                  MaterialTheme.colorScheme.primaryContainer,
+                  MaterialTheme.colorScheme.secondaryContainer,
+                ),
+              ),
+              CircleShape,
+            ),
         contentAlignment = Alignment.Center,
       ) {
         Text(
           client.initials,
           style = MaterialTheme.typography.headlineSmall,
-          color = MaterialTheme.colorScheme.onSecondaryContainer,
+          color = MaterialTheme.colorScheme.onPrimaryContainer,
           fontWeight = FontWeight.Bold,
         )
       }
       Spacer(Modifier.width(14.dp))
-      Column(Modifier.weight(1f)) {
+      Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
           client.name,
           style = MaterialTheme.typography.headlineSmall,
-          fontWeight = FontWeight.SemiBold,
+          fontWeight = FontWeight.Bold,
         )
         Text(
           client.contactLine ?: "Sin datos de contacto",
@@ -246,10 +335,11 @@ private fun ClientHeader(client: Client) {
           color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (client.pendingSync) {
-          Text(
-            "Pendiente de sincronizar",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.tertiary,
+          StatusPill(
+            label = "Pendiente de sincronizar",
+            icon = AppIcons.Sync,
+            container = MaterialTheme.extendedColors.warningContainer,
+            contentColor = MaterialTheme.extendedColors.onWarningContainer,
           )
         }
       }
@@ -266,10 +356,7 @@ private fun ContactCard(client: Client) {
       client.email?.takeIf { it.isNotBlank() }?.let { "Email" to it },
       client.address?.takeIf { it.isNotBlank() }?.let { "Dirección" to it },
     )
-  Card(
-    modifier = Modifier.fillMaxWidth(),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-  ) {
+  AppCard {
     Column(
       modifier = Modifier.padding(16.dp),
       verticalArrangement = Arrangement.spacedBy(6.dp),

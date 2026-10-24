@@ -1,43 +1,31 @@
 package com.veterapp.ui.common
 
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.veterapp.domain.AppointmentStatus
+import com.veterapp.theme.extendedColors
 
 @Composable
 fun AppointmentStatusChip(status: AppointmentStatus, modifier: Modifier = Modifier) {
-  val container =
+  val (icon, container, content) =
     when (status) {
-      AppointmentStatus.Scheduled -> MaterialTheme.colorScheme.surfaceVariant
-      AppointmentStatus.Confirmed -> MaterialTheme.colorScheme.primaryContainer
-      AppointmentStatus.Attended -> MaterialTheme.colorScheme.secondaryContainer
-      AppointmentStatus.Cancelled -> MaterialTheme.colorScheme.errorContainer
-      AppointmentStatus.NoShow -> MaterialTheme.colorScheme.tertiaryContainer
+      AppointmentStatus.Scheduled ->
+        Triple(AppIcons.Schedule, MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.onSurfaceVariant)
+      AppointmentStatus.Confirmed ->
+        Triple(AppIcons.CheckCircle, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+      AppointmentStatus.Attended ->
+        Triple(AppIcons.MedicalServices, MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
+      AppointmentStatus.Cancelled ->
+        Triple(AppIcons.Close, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
+      AppointmentStatus.NoShow ->
+        Triple(AppIcons.Warning, MaterialTheme.extendedColors.warningContainer, MaterialTheme.extendedColors.onWarningContainer)
     }
-  val content =
-    when (status) {
-      AppointmentStatus.Scheduled -> MaterialTheme.colorScheme.onSurfaceVariant
-      AppointmentStatus.Confirmed -> MaterialTheme.colorScheme.onPrimaryContainer
-      AppointmentStatus.Attended -> MaterialTheme.colorScheme.onSecondaryContainer
-      AppointmentStatus.Cancelled -> MaterialTheme.colorScheme.onErrorContainer
-      AppointmentStatus.NoShow -> MaterialTheme.colorScheme.onTertiaryContainer
-    }
-  Surface(
+  StatusPill(
+    label = status.label,
+    icon = icon,
     modifier = modifier,
-    shape = RoundedCornerShape(50),
-    color = container,
+    container = container,
     contentColor = content,
-  ) {
-    Text(
-      status.label,
-      modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-      style = MaterialTheme.typography.labelMedium,
-    )
-  }
+  )
 }

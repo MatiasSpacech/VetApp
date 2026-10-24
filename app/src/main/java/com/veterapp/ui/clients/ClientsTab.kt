@@ -7,18 +7,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -27,11 +23,21 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.veterapp.domain.Client
 import com.veterapp.domain.Pet
+import com.veterapp.theme.AppSpacing
+import com.veterapp.theme.extendedColors
+import com.veterapp.ui.common.AppCard
+import com.veterapp.ui.common.AppIcons
+import com.veterapp.ui.common.EmptyState
+import com.veterapp.ui.common.SearchField
+import com.veterapp.ui.common.StatusPill
 
 @Composable
 fun ClientsTab(
@@ -55,23 +61,45 @@ fun ClientsTab(
       }
     }
 
-  Column(modifier = modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-    Spacer(Modifier.height(8.dp))
-    OutlinedTextField(
+  Column(modifier = modifier.fillMaxSize().padding(horizontal = AppSpacing.lg)) {
+    Spacer(Modifier.size(AppSpacing.xs))
+    SearchField(
       value = search,
       onValueChange = { search = it },
-      label = { Text("Buscar por nombre, teléfono o documento") },
-      singleLine = true,
-      modifier = Modifier.fillMaxWidth(),
+      placeholder = "Buscar por nombre, teléfono o documento",
     )
-    Spacer(Modifier.height(12.dp))
-
+    Spacer(Modifier.size(AppSpacing.sm))
+    Text(
+      "${visible.size} cliente(s)",
+      style = MaterialTheme.typography.labelMedium,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.size(AppSpacing.xs))
     when {
-      clients.isEmpty() -> EmptyClients(onNewClient)
-      visible.isEmpty() -> NoClientResults(search)
-      else -> {
+      clients.isEmpty() ->
+        EmptyState(
+          title = "Todavía no hay clientes",
+          description = "Creá el primer cliente para vincular sus mascotas y su historia clínica.",
+          icon = AppIcons.Clients,
+          actionLabel = "Crear cliente",
+          onAction = onNewClient,
+        )
+      visible.isEmpty() ->
+        EmptyState(
+          title = "Sin resultados",
+          description = "No encontramos clientes para \"$search\".",
+          icon = AppIcons.Search,
+          actionLabel = "Limpiar búsqueda",
+          onAction = { search = "" },
+        )
+      else ->
         LazyColumn(
           modifier = Modifier.fillMaxSize(),
+          contentPadding =
+            androidx.compose.foundation.layout.PaddingValues(
+              top = 2.dp,
+              bottom = 96.dp,
+            ),
           verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
           items(visible, key = { it.id }) { client ->
@@ -81,37 +109,41 @@ fun ClientsTab(
               onClick = { onOpenClient(client.id) },
             )
           }
-          item { Spacer(Modifier.height(88.dp)) }
         }
-      }
     }
   }
 }
 
 @Composable
 private fun ClientCard(client: Client, petCount: Int, onClick: () -> Unit) {
-  Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-    Row(
-      modifier = Modifier.padding(12.dp),
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
+  AppCard(onClick = onClick, contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
       Box(
         modifier =
           Modifier
-            .size(52.dp)
-            .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape),
+            .size(54.dp)
+            .clip(CircleShape)
+            .background(
+              Brush.linearGradient(
+                listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.secondaryContainer),
+              ),
+            ),
         contentAlignment = Alignment.Center,
       ) {
         Text(
           client.initials,
           style = MaterialTheme.typography.titleMedium,
-          color = MaterialTheme.colorScheme.onSecondaryContainer,
-          fontWeight = FontWeight.SemiBold,
+          color = MaterialTheme.colorScheme.onPrimaryContainer,
+          fontWeight = FontWeight.Bold,
         )
       }
       Spacer(Modifier.width(12.dp))
-      Column(Modifier.weight(1f)) {
-        Text(client.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+      Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(
+          client.name,
+          style = MaterialTheme.typography.titleSmall,
+          fontWeight = FontWeight.SemiBold,
+        )
         Text(
           client.contactLine ?: "Sin datos de contacto",
           style = MaterialTheme.typography.bodySmall,
@@ -119,59 +151,33 @@ private fun ClientCard(client: Client, petCount: Int, onClick: () -> Unit) {
           maxLines = 1,
           overflow = TextOverflow.Ellipsis,
         )
-        Text(
-          when (petCount) {
-            0 -> "Sin mascotas"
-            1 -> "1 mascota"
-            else -> "$petCount mascotas"
-          },
-          style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.primary,
-        )
-        if (client.pendingSync) {
-          Text(
-            "Pendiente de sincronizar",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.tertiary,
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+          StatusPill(
+            label = when (petCount) {
+              0 -> "Sin mascotas"
+              1 -> "1 mascota"
+              else -> "$petCount mascotas"
+            },
+            icon = AppIcons.Pets,
+            container = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
           )
+          if (client.pendingSync) {
+            StatusPill(
+              label = "Pendiente",
+              icon = AppIcons.Sync,
+              container = MaterialTheme.extendedColors.warningContainer,
+              contentColor = MaterialTheme.extendedColors.onWarningContainer,
+            )
+          }
         }
       }
+      Icon(
+        painter = painterResource(AppIcons.ChevronRight),
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.size(20.dp),
+      )
     }
-  }
-}
-
-@Composable
-private fun EmptyClients(onNewClient: () -> Unit) {
-  Column(
-    modifier = Modifier.fillMaxSize(),
-    verticalArrangement = Arrangement.Center,
-    horizontalAlignment = Alignment.CenterHorizontally,
-  ) {
-    Text("Todavía no hay clientes", style = MaterialTheme.typography.titleMedium)
-    Spacer(Modifier.height(6.dp))
-    Text(
-      "Creá el primer cliente para vincular sus mascotas.",
-      style = MaterialTheme.typography.bodyMedium,
-      color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    Spacer(Modifier.height(16.dp))
-    Button(onClick = onNewClient) { Text("Crear cliente") }
-  }
-}
-
-@Composable
-private fun NoClientResults(search: String) {
-  Column(
-    modifier = Modifier.fillMaxSize(),
-    verticalArrangement = Arrangement.Center,
-    horizontalAlignment = Alignment.CenterHorizontally,
-  ) {
-    Text("Sin resultados para \"$search\"", style = MaterialTheme.typography.titleMedium)
-    Spacer(Modifier.height(6.dp))
-    Text(
-      "Probá con otro nombre, teléfono o documento.",
-      style = MaterialTheme.typography.bodyMedium,
-      color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
   }
 }

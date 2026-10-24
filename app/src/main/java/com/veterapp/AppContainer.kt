@@ -6,13 +6,17 @@ import com.veterapp.data.AppSettings
 import com.veterapp.data.AppointmentRepository
 import com.veterapp.data.AuditRepository
 import com.veterapp.data.AuthRepository
+import com.veterapp.data.CatalogRepository
 import com.veterapp.data.ClientRepository
 import com.veterapp.data.ClinicalRepository
+import com.veterapp.data.CommerceRepository
 import com.veterapp.data.NetworkMonitor
 import com.veterapp.data.PetRepository
+import com.veterapp.data.ReportRepository
 import com.veterapp.data.VaccinationRepository
 import com.veterapp.data.local.VetDatabase
 import com.veterapp.data.remote.SupabaseClientProvider
+import com.veterapp.export.ReportExporter
 import com.veterapp.notifications.ReminderNotifications
 import com.veterapp.notifications.ReminderScheduler
 import com.veterapp.notifications.ReminderService
@@ -34,6 +38,10 @@ class AppContainer(context: Context) {
   val clinicalRepository = ClinicalRepository(database, settings, auditRepository)
   val vaccinationRepository = VaccinationRepository(database, settings, auditRepository)
   val appointmentRepository = AppointmentRepository(database, settings, auditRepository)
+  val catalogRepository = CatalogRepository(database, settings, auditRepository)
+  val commerceRepository = CommerceRepository(database, settings, auditRepository)
+  val reportRepository = ReportRepository(database, settings)
+  val reportExporter = ReportExporter(context)
   val photoCompressor = PhotoCompressor(context)
   val photoRepository = PhotoRepository(clientProvider)
   val syncScheduler = SyncScheduler(context)
@@ -43,6 +51,7 @@ class AppContainer(context: Context) {
       vaccinationRepository = vaccinationRepository,
       notificationDao = database.vaccinationNotificationDao(),
       notifications = reminderNotifications,
+      settings = settings,
     )
   val reminderScheduler = ReminderScheduler(context)
   val securityRepository = SecurityRepository(settings)
@@ -68,5 +77,7 @@ class AppContainer(context: Context) {
       clinicalRepository = clinicalRepository,
       vaccinationRepository = vaccinationRepository,
       appointmentRepository = appointmentRepository,
+      catalogRepository = catalogRepository,
+      commerceRepository = commerceRepository,
     )
 }
