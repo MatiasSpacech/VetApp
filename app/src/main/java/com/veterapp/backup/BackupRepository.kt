@@ -40,6 +40,10 @@ class BackupRepository(
               clients = database.clientDao().all(),
               pets = database.petDao().all(),
               ownerHistory = database.ownerHistoryDao().all(),
+              consultations = database.consultationDao().all(),
+              consultationAddenda = database.addendumDao().all(),
+              vaccinations = database.vaccinationDao().all(),
+              vaccinationNotifications = database.vaccinationNotificationDao().all(),
               outbox = database.outboxDao().all(),
               audit = database.auditDao().all(),
             )
@@ -62,6 +66,10 @@ class BackupRepository(
                 put("clients", snapshot.clients.size)
                 put("pets", snapshot.pets.size)
                 put("owner_history", snapshot.ownerHistory.size)
+                put("consultations", snapshot.consultations.size)
+                put("consultation_addenda", snapshot.consultationAddenda.size)
+                put("vaccinations", snapshot.vaccinations.size)
+                put("vaccination_notifications", snapshot.vaccinationNotifications.size)
                 put("outbox", snapshot.outbox.size)
                 put("audit", snapshot.audit.size)
               },
@@ -88,7 +96,7 @@ class BackupRepository(
           }
 
         val snapshot = json.decodeFromString<BackupSnapshot>(plaintext.decodeToString())
-        require(snapshot.version == BackupSnapshot.CURRENT_VERSION) {
+        require(snapshot.version in BackupSnapshot.MIN_VERSION..BackupSnapshot.CURRENT_VERSION) {
           "Versión de backup no soportada"
         }
         val expectedClinic = settings.clinicId ?: settings.localClinicId
@@ -101,6 +109,18 @@ class BackupRepository(
         require(snapshot.ownerHistory.all { it.clinicId == expectedClinic }) {
           "El backup pertenece a otra clínica"
         }
+        require(snapshot.consultations.all { it.clinicId == expectedClinic }) {
+          "El backup pertenece a otra clínica"
+        }
+        require(snapshot.consultationAddenda.all { it.clinicId == expectedClinic }) {
+          "El backup pertenece a otra clínica"
+        }
+        require(snapshot.vaccinations.all { it.clinicId == expectedClinic }) {
+          "El backup pertenece a otra clínica"
+        }
+        require(snapshot.vaccinationNotifications.all { it.clinicId == expectedClinic }) {
+          "El backup pertenece a otra clínica"
+        }
         require(snapshot.audit.all { it.clinicId == expectedClinic }) {
           "El backup pertenece a otra clínica"
         }
@@ -111,9 +131,17 @@ class BackupRepository(
           database.auditDao().clear()
           database.clientDao().clear()
           database.ownerHistoryDao().clear()
+          database.consultationDao().clear()
+          database.addendumDao().clear()
+          database.vaccinationDao().clear()
+          database.vaccinationNotificationDao().clear()
           database.clientDao().insertAll(snapshot.clients)
           database.petDao().insertAll(snapshot.pets)
           database.ownerHistoryDao().insertAll(snapshot.ownerHistory)
+          database.consultationDao().insertAll(snapshot.consultations)
+          database.addendumDao().insertAll(snapshot.consultationAddenda)
+          database.vaccinationDao().insertAll(snapshot.vaccinations)
+          database.vaccinationNotificationDao().insertAll(snapshot.vaccinationNotifications)
           database.outboxDao().insertAll(snapshot.outbox)
           database.auditDao().insertAll(snapshot.audit)
           auditRepository.record(
@@ -125,6 +153,10 @@ class BackupRepository(
                 put("clients", snapshot.clients.size)
                 put("pets", snapshot.pets.size)
                 put("owner_history", snapshot.ownerHistory.size)
+                put("consultations", snapshot.consultations.size)
+                put("consultation_addenda", snapshot.consultationAddenda.size)
+                put("vaccinations", snapshot.vaccinations.size)
+                put("vaccination_notifications", snapshot.vaccinationNotifications.size)
                 put("outbox", snapshot.outbox.size)
                 put("audit", snapshot.audit.size)
               },

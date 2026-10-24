@@ -37,6 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.veterapp.ui.clients.ClientFormDialog
 import com.veterapp.ui.clients.ClientsTab
 import com.veterapp.ui.clients.ClientsViewModel
+import com.veterapp.ui.clinical.ClinicalViewModel
 import com.veterapp.ui.home.HomeTab
 import com.veterapp.ui.pets.PetFormDialog
 import com.veterapp.ui.pets.PetsTab
@@ -53,6 +54,7 @@ fun MainScreen(
   mainViewModel: MainViewModel,
   clientsViewModel: ClientsViewModel,
   petsViewModel: PetsViewModel,
+  clinicalViewModel: ClinicalViewModel,
   onOpenSettings: () -> Unit,
   onOpenClient: (String) -> Unit,
   onOpenPet: (String) -> Unit,
@@ -71,6 +73,7 @@ fun MainScreen(
         mainViewModel = mainViewModel,
         clientsViewModel = clientsViewModel,
         petsViewModel = petsViewModel,
+        clinicalViewModel = clinicalViewModel,
         onOpenSettings = onOpenSettings,
         onOpenClient = onOpenClient,
         onOpenPet = onOpenPet,
@@ -98,7 +101,7 @@ private fun ErrorScreen(message: String) {
     Text(message, color = MaterialTheme.colorScheme.error)
     Spacer(Modifier.height(12.dp))
     Text(
-      "Revisá la configuración de Supabase y el SQL de las etapas 0 y 2.",
+      "Revisá la configuración de Supabase y el SQL de las etapas 0, 2 y 3.",
       style = MaterialTheme.typography.bodySmall,
     )
   }
@@ -163,6 +166,7 @@ private fun AppContent(
   mainViewModel: MainViewModel,
   clientsViewModel: ClientsViewModel,
   petsViewModel: PetsViewModel,
+  clinicalViewModel: ClinicalViewModel,
   onOpenSettings: () -> Unit,
   onOpenClient: (String) -> Unit,
   onOpenPet: (String) -> Unit,
@@ -170,6 +174,7 @@ private fun AppContent(
 ) {
   val clients by clientsViewModel.clients.collectAsStateWithLifecycle()
   val pets by petsViewModel.pets.collectAsStateWithLifecycle()
+  val alerts by clinicalViewModel.alerts.collectAsStateWithLifecycle()
   var selectedTabName by rememberSaveable { mutableStateOf(MainTab.Home.name) }
   val selectedTab =
     runCatching { MainTab.valueOf(selectedTabName) }.getOrDefault(MainTab.Home)
@@ -229,6 +234,9 @@ private fun AppContent(
             state = state,
             clients = clients,
             pets = pets,
+            alerts = alerts,
+            onOpenPet = onOpenPet,
+            onRefreshReminders = clinicalViewModel::refreshReminders,
             modifier = Modifier.weight(1f),
           )
         MainTab.Clients ->

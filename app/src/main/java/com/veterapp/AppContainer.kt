@@ -6,10 +6,15 @@ import com.veterapp.data.AppSettings
 import com.veterapp.data.AuditRepository
 import com.veterapp.data.AuthRepository
 import com.veterapp.data.ClientRepository
+import com.veterapp.data.ClinicalRepository
 import com.veterapp.data.NetworkMonitor
 import com.veterapp.data.PetRepository
+import com.veterapp.data.VaccinationRepository
 import com.veterapp.data.local.VetDatabase
 import com.veterapp.data.remote.SupabaseClientProvider
+import com.veterapp.notifications.ReminderNotifications
+import com.veterapp.notifications.ReminderScheduler
+import com.veterapp.notifications.ReminderService
 import com.veterapp.photo.PhotoCompressor
 import com.veterapp.photo.PhotoRepository
 import com.veterapp.security.SecurityRepository
@@ -25,9 +30,19 @@ class AppContainer(context: Context) {
   val auditRepository = AuditRepository(database, settings)
   val clientRepository = ClientRepository(database, settings, auditRepository)
   val petRepository = PetRepository(database, settings, auditRepository)
+  val clinicalRepository = ClinicalRepository(database, settings, auditRepository)
+  val vaccinationRepository = VaccinationRepository(database, settings, auditRepository)
   val photoCompressor = PhotoCompressor(context)
   val photoRepository = PhotoRepository(clientProvider)
   val syncScheduler = SyncScheduler(context)
+  val reminderNotifications = ReminderNotifications(context)
+  val reminderService =
+    ReminderService(
+      vaccinationRepository = vaccinationRepository,
+      notificationDao = database.vaccinationNotificationDao(),
+      notifications = reminderNotifications,
+    )
+  val reminderScheduler = ReminderScheduler(context)
   val securityRepository = SecurityRepository(settings)
   val backupRepository =
     BackupRepository(
@@ -35,7 +50,10 @@ class AppContainer(context: Context) {
       database = database,
       settings = settings,
       auditRepository = auditRepository,
-      onRestored = { syncScheduler.requestSync() },
+      onRestored = {
+        syncScheduler.requestSync()
+        reminderScheduler.requestRefresh()
+      },
     )
   val syncRepository =
     SyncRepository(
@@ -45,5 +63,7 @@ class AppContainer(context: Context) {
       authRepository = authRepository,
       petRepository = petRepository,
       clientRepository = clientRepository,
+      clinicalRepository = clinicalRepository,
+      vaccinationRepository = vaccinationRepository,
     )
 }

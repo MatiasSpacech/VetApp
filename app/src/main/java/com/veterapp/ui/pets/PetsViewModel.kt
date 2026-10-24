@@ -102,7 +102,15 @@ class PetsViewModel(private val container: AppContainer) : ViewModel() {
   fun changeStatus(pet: Pet, status: PetStatus, onResult: (Result<Unit>) -> Unit) {
     viewModelScope.launch {
       runCatching { container.petRepository.changeStatus(pet.id, status) }
-        .onSuccess { container.syncScheduler.requestSync() }
+        .onSuccess {
+          if (status != PetStatus.Active) {
+            container.vaccinationRepository.allForPet(pet.id).forEach { vaccination ->
+              container.reminderNotifications.cancelForVaccination(vaccination.id)
+            }
+          }
+          container.reminderScheduler.requestRefresh()
+          container.syncScheduler.requestSync()
+        }
         .fold(
           onSuccess = { onResult(Result.success(Unit)) },
           onFailure = { onResult(Result.failure(it)) },
@@ -129,7 +137,13 @@ class PetsViewModel(private val container: AppContainer) : ViewModel() {
   fun archivePet(pet: Pet, onResult: (Result<Unit>) -> Unit) {
     viewModelScope.launch {
       runCatching { container.petRepository.softDelete(pet.id) }
-        .onSuccess { container.syncScheduler.requestSync() }
+        .onSuccess {
+          container.vaccinationRepository.allForPet(pet.id).forEach { vaccination ->
+            container.reminderNotifications.cancelForVaccination(vaccination.id)
+          }
+          container.reminderScheduler.requestRefresh()
+          container.syncScheduler.requestSync()
+        }
         .fold(
           onSuccess = { onResult(Result.success(Unit)) },
           onFailure = { onResult(Result.failure(it)) },

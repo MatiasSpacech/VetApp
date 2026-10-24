@@ -19,6 +19,9 @@ class VeterAppApplication : Application() {
     super.onCreate()
     container = AppContainer(this)
     container.syncScheduler.schedulePeriodic()
+    container.reminderNotifications.ensureChannel()
+    container.reminderScheduler.schedulePeriodic()
+    container.reminderScheduler.requestRefresh()
 
     ProcessLifecycleOwner.get().lifecycle.addObserver(
       object : DefaultLifecycleObserver {

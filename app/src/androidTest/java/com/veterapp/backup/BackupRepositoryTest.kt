@@ -8,12 +8,21 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.veterapp.data.AppSettings
 import com.veterapp.data.AuditRepository
 import com.veterapp.data.ClientRepository
+import com.veterapp.data.ClinicalRepository
 import com.veterapp.data.PetRepository
+import com.veterapp.data.VaccinationRepository
+import com.veterapp.data.local.VaccinationNotificationEntity
 import com.veterapp.data.local.VetDatabase
 import com.veterapp.domain.ClientDraft
 import com.veterapp.domain.ClientSaveResult
+import com.veterapp.domain.ConsultationAddendumDraft
+import com.veterapp.domain.ConsultationDraft
 import com.veterapp.domain.PetDraft
+import com.veterapp.domain.ReminderMilestone
+import com.veterapp.domain.VaccinationDraft
+import com.veterapp.domain.VaccinationSchedule
 import java.io.File
+import java.time.LocalDate
 import java.util.UUID
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -35,6 +44,8 @@ class BackupRepositoryTest {
       val audit = AuditRepository(database, settings)
       val clients = ClientRepository(database, settings, audit)
       val pets = PetRepository(database, settings, audit)
+      val clinical = ClinicalRepository(database, settings, audit)
+      val vaccinations = VaccinationRepository(database, settings, audit)
       val backup = BackupRepository(context, database, settings, audit)
       val file = File(context.cacheDir, "backup-test.vbackup")
       val passphrase = "backup123"
@@ -75,10 +86,55 @@ class BackupRepositoryTest {
         fotoUrl = null,
       )
       pets.changeOwner(petId, leo.id, "Cambio de familia")
+      val consultation =
+        clinical.createConsultation(
+          petId = petId,
+          draft =
+            ConsultationDraft(
+              consultedOn = LocalDate.of(2026, 10, 24).toEpochDay(),
+              reason = "Control anual",
+              exam = "Normal",
+              diagnosis = "Sana",
+              treatment = null,
+              medication = null,
+              instructions = null,
+            ),
+        )
+      clinical.addAddendum(
+        consultationId = consultation.id,
+        draft = ConsultationAddendumDraft(reason = "Corrección", text = "Se ajusta la indicación"),
+      )
+      vaccinations.createVaccination(
+        petId = petId,
+        draft =
+          VaccinationDraft(
+            vaccineName = "Rabia",
+            appliedOn = LocalDate.of(2026, 10, 24).toEpochDay(),
+            schedule = VaccinationSchedule.SixMonths,
+            manualNextDueOn = null,
+            lot = null,
+            notes = null,
+          ),
+      )
+      val vaccination = vaccinations.observeForPet(petId).first().single()
+      database.vaccinationNotificationDao().insert(
+        VaccinationNotificationEntity(
+          id = UUID.randomUUID().toString(),
+          clinicId = "local-clinic",
+          vaccinationId = vaccination.id,
+          petId = petId,
+          dueOn = vaccination.nextDueOn!!,
+          milestone = ReminderMilestone.Month.storage,
+          notifiedAt = System.currentTimeMillis(),
+        ),
+      )
 
       assertEquals(2, clients.clients.first().size)
       assertEquals(1, pets.pets.first().size)
       assertEquals(1, pets.observeOwnerHistory(petId).first().size)
+      assertEquals(1, clinical.observeConsultations(petId).first().size)
+      assertEquals(1, clinical.observeAddenda(petId).first().size)
+      assertEquals(1, vaccinations.observeForPet(petId).first().size)
       assertTrue(database.auditDao().all().any { it.action == "pet.create" })
       assertTrue(database.auditDao().all().any { it.action == "client.create" })
 
@@ -93,8 +149,15 @@ class BackupRepositoryTest {
       database.auditDao().clear()
       database.clientDao().clear()
       database.ownerHistoryDao().clear()
+      database.consultationDao().clear()
+      database.addendumDao().clear()
+      database.vaccinationDao().clear()
+      database.vaccinationNotificationDao().clear()
       assertEquals(0, pets.pets.first().size)
       assertEquals(0, clients.clients.first().size)
+      assertEquals(0, clinical.observeConsultations(petId).first().size)
+      assertEquals(0, vaccinations.observeForPet(petId).first().size)
+      assertEquals(0, database.vaccinationNotificationDao().all().size)
 
       val restored = backup.restore(passphrase.toCharArray(), Uri.fromFile(file))
       assertTrue(restored.isSuccess)
@@ -103,7 +166,11 @@ class BackupRepositoryTest {
       assertEquals("Luna", pets.pets.first().first().name)
       assertEquals(2, clients.clients.first().size)
       assertEquals(1, pets.observeOwnerHistory(petId).first().size)
-      assertEquals(4, database.outboxDao().observeCount().first())
+      assertEquals(1, clinical.observeConsultations(petId).first().size)
+      assertEquals(1, clinical.observeAddenda(petId).first().size)
+      assertEquals(1, vaccinations.observeForPet(petId).first().size)
+      assertEquals(1, database.vaccinationNotificationDao().all().size)
+      assertEquals(7, database.outboxDao().observeCount().first())
       assertTrue(database.auditDao().all().any { it.action == "pet.create" })
       assertTrue(database.auditDao().all().any { it.action == "client.create" })
       assertTrue(database.auditDao().all().any { it.action == "backup.restore" })

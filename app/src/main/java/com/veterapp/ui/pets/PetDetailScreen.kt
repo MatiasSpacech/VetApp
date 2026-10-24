@@ -22,9 +22,11 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -33,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,15 +43,31 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.veterapp.domain.Client
+import com.veterapp.domain.Consultation
 import com.veterapp.domain.Pet
 import com.veterapp.domain.PetOwnerHistory
 import com.veterapp.domain.PetStatus
+import com.veterapp.domain.Vaccination
+import com.veterapp.ui.clinical.AddendumDialog
+import com.veterapp.ui.clinical.ClinicalHistoryTab
+import com.veterapp.ui.clinical.ClinicalViewModel
+import com.veterapp.ui.clinical.ConsultationFormDialog
 import com.veterapp.ui.clients.ClientPickerDialog
 import com.veterapp.ui.clients.ClientsViewModel
 import com.veterapp.ui.common.PetStatusChip
 import com.veterapp.ui.common.formatDate
+import com.veterapp.ui.vaccines.RescheduleDialog
+import com.veterapp.ui.vaccines.VaccinationFormDialog
+import com.veterapp.ui.vaccines.VaccinationPrefill
+import com.veterapp.ui.vaccines.VaccinationsTab
 import com.veterapp.util.userMessage
 import kotlinx.coroutines.launch
+
+private enum class PetDetailTab(val label: String) {
+  Summary("Resumen"),
+  Clinical("Historia"),
+  Vaccines("Vacunas"),
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,21 +75,37 @@ fun PetDetailScreen(
   petId: String,
   clientsViewModel: ClientsViewModel,
   petsViewModel: PetsViewModel,
+  clinicalViewModel: ClinicalViewModel,
   onBack: () -> Unit,
   onOpenClient: (String) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   val pet by petsViewModel.observePet(petId).collectAsStateWithLifecycle(initialValue = null)
-  val history by petsViewModel.observeOwnerHistory(petId).collectAsStateWithLifecycle(initialValue = emptyList())
+  val ownerHistory by petsViewModel.observeOwnerHistory(petId)
+    .collectAsStateWithLifecycle(initialValue = emptyList())
+  val consultations by clinicalViewModel.observeConsultations(petId)
+    .collectAsStateWithLifecycle(initialValue = emptyList())
+  val addenda by clinicalViewModel.observeAddenda(petId)
+    .collectAsStateWithLifecycle(initialValue = emptyList())
+  val vaccinations by clinicalViewModel.observeVaccinations(petId)
+    .collectAsStateWithLifecycle(initialValue = emptyList())
   val clients by clientsViewModel.clients.collectAsStateWithLifecycle()
   val online by petsViewModel.online.collectAsStateWithLifecycle()
   val snackbar = remember { SnackbarHostState() }
   val scope = rememberCoroutineScope()
+  var selectedTabName by rememberSaveable(petId) { mutableStateOf(PetDetailTab.Summary.name) }
+  val selectedTab =
+    runCatching { PetDetailTab.valueOf(selectedTabName) }.getOrDefault(PetDetailTab.Summary)
   var showEdit by remember { mutableStateOf(false) }
   var showArchive by remember { mutableStateOf(false) }
   var showOwnerPicker by remember { mutableStateOf(false) }
   var newOwner by remember { mutableStateOf<Client?>(null) }
   var statusBusy by remember { mutableStateOf(false) }
+  var showConsultationForm by remember { mutableStateOf(false) }
+  var addendumFor by remember { mutableStateOf<Consultation?>(null) }
+  var showVaccinationForm by remember { mutableStateOf(false) }
+  var vaccinationPrefill by remember { mutableStateOf<VaccinationPrefill?>(null) }
+  var rescheduleFor by remember { mutableStateOf<Vaccination?>(null) }
 
   fun message(text: String) {
     scope.launch { snackbar.showSnackbar(text) }
@@ -80,7 +115,7 @@ fun PetDetailScreen(
     modifier = modifier.fillMaxSize(),
     topBar = {
       TopAppBar(
-        title = { Text("Ficha de la mascota") },
+        title = { Text(pet?.name ?: "Ficha de la mascota") },
         navigationIcon = { TextButton(onClick = onBack) { Text("Volver") } },
       )
     },
@@ -101,80 +136,67 @@ fun PetDetailScreen(
       return@Scaffold
     }
 
-    val owner = clients.firstOrNull { it.id == current.clientId }
-    Column(
-      modifier =
-        Modifier
-          .fillMaxSize()
-          .padding(padding)
-          .verticalScroll(rememberScrollState())
-          .padding(16.dp),
-      verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-      PetHeader(current)
-      OwnerCard(
-        pet = current,
-        owner = owner,
-        onOpenClient = { current.clientId?.let(onOpenClient) },
-        onChangeOwner = {
-          if (clients.count { it.id != current.clientId } == 0) {
-            message("No hay otro cliente. Creá uno desde la pestaña Clientes.")
-          } else {
-            showOwnerPicker = true
-          }
-        },
-      )
-      StatusCard(
-        pet = current,
-        busy = statusBusy,
-        onChange = { status ->
-          if (status != current.status) {
-            statusBusy = true
-            petsViewModel.changeStatus(current, status) { result ->
-              statusBusy = false
-              result.onFailure { message(it.userMessage("No se pudo cambiar el estado")) }
-            }
-          }
-        },
-      )
-      if (!current.notes.isNullOrBlank()) {
-        Card(
-          modifier = Modifier.fillMaxWidth(),
-          colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        ) {
-          Column(Modifier.padding(16.dp)) {
-            Text("Notas", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(4.dp))
-            Text(current.notes, style = MaterialTheme.typography.bodyMedium)
-          }
+    Column(Modifier.fillMaxSize().padding(padding)) {
+      PrimaryTabRow(selectedTabIndex = selectedTab.ordinal) {
+        PetDetailTab.entries.forEach { tab ->
+          Tab(
+            selected = selectedTab == tab,
+            onClick = { selectedTabName = tab.name },
+            text = { Text(tab.label) },
+          )
         }
       }
-
-      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = { showEdit = true }, modifier = Modifier.weight(1f)) {
-          Text("Editar mascota")
-        }
-        OutlinedButton(onClick = { showArchive = true }, modifier = Modifier.weight(1f)) {
-          Text("Archivar", color = MaterialTheme.colorScheme.error)
-        }
+      when (selectedTab) {
+        PetDetailTab.Summary ->
+          PetSummaryTab(
+            pet = current,
+            owner = clients.firstOrNull { it.id == current.clientId },
+            ownerHistory = ownerHistory,
+            statusBusy = statusBusy,
+            onChangeStatus = { status ->
+              if (status != current.status) {
+                statusBusy = true
+                petsViewModel.changeStatus(current, status) { result ->
+                  statusBusy = false
+                  result.onFailure { message(it.userMessage("No se pudo cambiar el estado")) }
+                }
+              }
+            },
+            onOpenClient = { current.clientId?.let(onOpenClient) },
+            onChangeOwner = {
+              if (clients.count { it.id != current.clientId } == 0) {
+                message("No hay otro cliente. Creá uno desde la pestaña Clientes.")
+              } else {
+                showOwnerPicker = true
+              }
+            },
+            onEdit = { showEdit = true },
+            onArchive = { showArchive = true },
+            modifier = Modifier.weight(1f),
+          )
+        PetDetailTab.Clinical ->
+          ClinicalHistoryTab(
+            consultations = consultations,
+            addenda = addenda,
+            onAddConsultation = { showConsultationForm = true },
+            onAddAddendum = { addendumFor = it },
+            modifier = Modifier.weight(1f),
+          )
+        PetDetailTab.Vaccines ->
+          VaccinationsTab(
+            vaccinations = vaccinations,
+            onAddVaccination = {
+              vaccinationPrefill = null
+              showVaccinationForm = true
+            },
+            onApplyDose = {
+              vaccinationPrefill = VaccinationPrefill(vaccineName = it.vaccineName)
+              showVaccinationForm = true
+            },
+            onReschedule = { rescheduleFor = it },
+            modifier = Modifier.weight(1f),
+          )
       }
-
-      HorizontalDivider()
-      Text(
-        "Historial de propietario",
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.SemiBold,
-      )
-      if (history.isEmpty()) {
-        Text(
-          "Sin cambios de propietario.",
-          style = MaterialTheme.typography.bodyMedium,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-      } else {
-        history.forEach { item -> OwnerHistoryRow(item) }
-      }
-      Spacer(Modifier.height(24.dp))
     }
   }
 
@@ -290,6 +312,124 @@ fun PetDetailScreen(
         TextButton(onClick = { showArchive = false }) { Text("Cancelar") }
       },
     )
+  }
+
+  if (showConsultationForm) {
+    ConsultationFormDialog(
+      onSave = { draft, onResult ->
+        clinicalViewModel.createConsultation(petId, draft) { result ->
+          onResult(result.map { Unit })
+        }
+      },
+      onDismiss = { showConsultationForm = false },
+    )
+  }
+
+  addendumFor?.let { consultation ->
+    AddendumDialog(
+      consultationDate = consultation.consultedAt,
+      onSave = { draft, onResult ->
+        clinicalViewModel.addAddendum(consultation.id, draft) { result ->
+          onResult(result.map { Unit })
+        }
+      },
+      onDismiss = { addendumFor = null },
+    )
+  }
+
+  if (showVaccinationForm) {
+    VaccinationFormDialog(
+      prefill = vaccinationPrefill,
+      onSave = { draft, onResult ->
+        clinicalViewModel.createVaccination(petId, draft) { result ->
+          onResult(result.map { Unit })
+        }
+      },
+      onDismiss = {
+        showVaccinationForm = false
+        vaccinationPrefill = null
+      },
+    )
+  }
+
+  rescheduleFor?.let { vaccination ->
+    RescheduleDialog(
+      vaccination = vaccination,
+      onSave = { newDueOn, reason, onResult ->
+        clinicalViewModel.rescheduleVaccination(vaccination, newDueOn, reason, onResult)
+      },
+      onDismiss = { rescheduleFor = null },
+    )
+  }
+}
+
+@Composable
+private fun PetSummaryTab(
+  pet: Pet,
+  owner: Client?,
+  ownerHistory: List<PetOwnerHistory>,
+  statusBusy: Boolean,
+  onChangeStatus: (PetStatus) -> Unit,
+  onOpenClient: () -> Unit,
+  onChangeOwner: () -> Unit,
+  onEdit: () -> Unit,
+  onArchive: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  Column(
+    modifier =
+      modifier
+        .fillMaxSize()
+        .verticalScroll(rememberScrollState())
+        .padding(16.dp),
+    verticalArrangement = Arrangement.spacedBy(12.dp),
+  ) {
+    PetHeader(pet)
+    OwnerCard(
+      pet = pet,
+      owner = owner,
+      onOpenClient = onOpenClient,
+      onChangeOwner = onChangeOwner,
+    )
+    StatusCard(pet = pet, busy = statusBusy, onChange = onChangeStatus)
+    if (!pet.notes.isNullOrBlank()) {
+      Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+      ) {
+        Column(Modifier.padding(16.dp)) {
+          Text("Notas", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+          Spacer(Modifier.height(4.dp))
+          Text(pet.notes, style = MaterialTheme.typography.bodyMedium)
+        }
+      }
+    }
+
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      OutlinedButton(onClick = onEdit, modifier = Modifier.weight(1f)) {
+        Text("Editar mascota")
+      }
+      OutlinedButton(onClick = onArchive, modifier = Modifier.weight(1f)) {
+        Text("Archivar", color = MaterialTheme.colorScheme.error)
+      }
+    }
+
+    HorizontalDivider()
+    Text(
+      "Historial de propietario",
+      style = MaterialTheme.typography.titleMedium,
+      fontWeight = FontWeight.SemiBold,
+    )
+    if (ownerHistory.isEmpty()) {
+      Text(
+        "Sin cambios de propietario.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+    } else {
+      ownerHistory.forEach { item -> OwnerHistoryRow(item) }
+    }
+    Spacer(Modifier.height(24.dp))
   }
 }
 

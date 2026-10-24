@@ -81,6 +81,44 @@ class VetDatabaseMigrationTest {
     }
   }
 
+  @Test
+  fun migratesFromVersion3To4() {
+    helper.createDatabase(DATABASE_NAME, 3).use { database ->
+      database.execSQL(
+        "INSERT INTO pets (" +
+          "id, clinicId, name, species, breed, ownerName, notes, fotoUrl, " +
+          "createdAt, updatedAt, revision, deletedAt, originDeviceId, pendingSync, clientId, status" +
+          ") VALUES (" +
+          "'pet-1', 'clinic-1', 'Luna', 'Perro', NULL, 'Ana', NULL, NULL, " +
+          "1, 1, 0, NULL, 'device-1', 0, NULL, 'active'" +
+          ")",
+      )
+    }
+
+    helper.runMigrationsAndValidate(DATABASE_NAME, 4, true, VetDatabase.MIGRATION_3_4).use { database ->
+      database.query("SELECT COUNT(*) FROM consultations").use { cursor ->
+        assertTrue(cursor.moveToFirst())
+        assertEquals(0, cursor.getInt(0))
+      }
+      database.query("SELECT COUNT(*) FROM consultation_addenda").use { cursor ->
+        assertTrue(cursor.moveToFirst())
+        assertEquals(0, cursor.getInt(0))
+      }
+      database.query("SELECT COUNT(*) FROM vaccinations").use { cursor ->
+        assertTrue(cursor.moveToFirst())
+        assertEquals(0, cursor.getInt(0))
+      }
+      database.query("SELECT COUNT(*) FROM vaccination_notifications").use { cursor ->
+        assertTrue(cursor.moveToFirst())
+        assertEquals(0, cursor.getInt(0))
+      }
+      database.query("SELECT name FROM pets").use { cursor ->
+        assertTrue(cursor.moveToFirst())
+        assertEquals("Luna", cursor.getString(0))
+      }
+    }
+  }
+
   private companion object {
     const val DATABASE_NAME = "migration-test.db"
   }

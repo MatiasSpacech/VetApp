@@ -3,6 +3,7 @@ package com.veterapp.ui.main
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.veterapp.AppContainer
+import com.veterapp.sync.SyncRepository
 import com.veterapp.util.userMessage
 import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -118,7 +119,10 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     viewModelScope.launch {
       syncing.value = true
       try {
-        container.syncRepository.syncNow()
+        val result = container.syncRepository.syncNow()
+        if (result is SyncRepository.SyncResult.Success) {
+          container.reminderScheduler.requestRefresh()
+        }
       } finally {
         syncing.value = false
       }

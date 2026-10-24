@@ -12,7 +12,10 @@ class SyncWorker(
   override suspend fun doWork(): Result {
     val app = applicationContext as? VeterAppApplication ?: return Result.success()
     return when (val result = app.container.syncRepository.syncNow()) {
-      SyncRepository.SyncResult.Success,
+      SyncRepository.SyncResult.Success -> {
+        app.container.reminderScheduler.requestRefresh()
+        Result.success()
+      }
       SyncRepository.SyncResult.NotConfigured,
       SyncRepository.SyncResult.NotAuthenticated -> Result.success()
       is SyncRepository.SyncResult.Failure -> {

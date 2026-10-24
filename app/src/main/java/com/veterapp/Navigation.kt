@@ -10,6 +10,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.veterapp.ui.clients.ClientDetailScreen
 import com.veterapp.ui.clients.ClientsViewModel
+import com.veterapp.ui.clinical.ClinicalViewModel
 import com.veterapp.ui.main.MainScreen
 import com.veterapp.ui.main.MainViewModel
 import com.veterapp.ui.pets.PetDetailScreen
@@ -23,6 +24,7 @@ fun MainNavigation() {
   val mainViewModel: MainViewModel = viewModel { MainViewModel(app.container) }
   val clientsViewModel: ClientsViewModel = viewModel { ClientsViewModel(app.container) }
   val petsViewModel: PetsViewModel = viewModel { PetsViewModel(app.container) }
+  val clinicalViewModel: ClinicalViewModel = viewModel { ClinicalViewModel(app.container) }
   val backStack = rememberNavBackStack(Main)
 
   NavDisplay(
@@ -35,6 +37,7 @@ fun MainNavigation() {
             mainViewModel = mainViewModel,
             clientsViewModel = clientsViewModel,
             petsViewModel = petsViewModel,
+            clinicalViewModel = clinicalViewModel,
             onOpenSettings = { backStack.add(Settings) },
             onOpenClient = { backStack.add(ClientDetail(it)) },
             onOpenPet = { backStack.add(PetDetail(it)) },
@@ -62,6 +65,7 @@ fun MainNavigation() {
             petId = key.petId,
             clientsViewModel = clientsViewModel,
             petsViewModel = petsViewModel,
+            clinicalViewModel = clinicalViewModel,
             onBack = { backStack.removeLastOrNull() },
             onOpenClient = { backStack.add(ClientDetail(it)) },
             modifier = Modifier.safeDrawingPadding(),
