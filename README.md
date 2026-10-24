@@ -2,16 +2,16 @@
 
 App Android de gestión veterinaria, local-first con Room y sincronización a Supabase.
 
-## Estado actual: etapa 3 (historia clínica y vacunaciones)
+## Estado actual: etapa 4 (turnos y calendario)
 
 Incluye:
 
 - Proyecto Android con Kotlin, Compose, Material 3 y tema lila.
-- Room local con clientes, mascotas, historial de propietario, consultas, addenda, vacunaciones, avisos, outbox de sincronización y auditoría en la versión 4 del esquema.
-- Migraciones automáticas de la base local de la versión 1 a la 4.
+- Room local con clientes, mascotas, historial de propietario, consultas, addenda, vacunaciones, avisos, turnos, outbox de sincronización y auditoría en la versión 5 del esquema.
+- Migraciones automáticas de la base local de la versión 1 a la 5.
 - Login con Supabase Auth (email/contraseña).
 - `bootstrap_clinic` para crear la clínica y la membresía del usuario.
-- Push idempotente por RPC `apply_client_operation`, `apply_pet_operation`, `apply_consultation_operation`, `apply_addendum_operation` y `apply_vaccination_operation`, con pull de todas las entidades.
+- Push idempotente por RPC `apply_client_operation`, `apply_pet_operation`, `apply_consultation_operation`, `apply_addendum_operation`, `apply_vaccination_operation` y `apply_appointment_operation`, con pull de todas las entidades.
 - Sincronización inmediata al guardar, con WorkManager y reintentos.
 - Clientes con ficha, teléfono, documento, email, dirección y notas; búsqueda y detección de duplicados por teléfono o documento.
 - Mascotas vinculadas a un cliente, con estado activa, inactiva o fallecida.
@@ -23,18 +23,23 @@ Incluye:
 - Recordatorios locales diarios con WorkManager a 30 y 7 días y al vencer, con deduplicación por dosis y aviso.
 - Dashboard de vacunas en Inicio con vencidas, por vencer y próximas, y acceso directo a la mascota.
 - Acciones para aplicar la dosis siguiente o reprogramar la próxima fecha, con auditoría.
+- Turnos con vistas mensual, semanal y diaria, estados y vínculo con la consulta clínica.
+- Detección de superposiciones y de turnos fuera del horario del local, con confirmación explícita.
+- Horario de atención por día y duración predeterminada configurables en Ajustes.
+- Recordatorio por WhatsApp prearmado al propietario desde el detalle del turno.
+- Turnos del día y acceso a la agenda desde Inicio.
 - Alta de mascota con foto desde galería o cámara.
 - Compresión local a máximo 800x800 y 100 KB, en WebP o JPEG.
 - Subida de foto solo con conexión al bucket público `mascotas`.
-- Backup local cifrado manual (AES-256-GCM con frase) de la base, el outbox, historias, vacunaciones, avisos y auditoría; no incluye fotos.
+- Backup local cifrado manual (AES-256-GCM con frase) de la base, el outbox, historias, vacunaciones, avisos, turnos y auditoría; no incluye fotos.
 - Recordatorio de backup semanal en la pantalla principal.
 - Bloqueo de la app con PIN de 4 a 8 dígitos y biometría opcional.
 - Auditoría local de eventos críticos, visible desde Ajustes y restaurable desde un backup.
-- Pantalla de Ajustes con seguridad, backup y auditoría.
-- Pestañas Inicio, Clientes y Mascotas; la ficha de la mascota suma Resumen, Historia y Vacunas.
+- Pantalla de Ajustes con seguridad, agenda, backup y auditoría.
+- Pestañas Inicio, Clientes, Mascotas y Turnos; la ficha de la mascota suma Resumen, Historia y Vacunas.
 - Modo local sin Supabase para probar la UI y Room.
 
-Todavía no incluye: turnos, catálogo, ventas, caja, reportes avanzados, protocolos por especie, mensajes de WhatsApp, multiusuario ni resolución de conflictos de sincronización.
+Todavía no incluye: catálogo, ventas, caja, reportes avanzados, protocolos por especie, agenda por profesional, recordatorios automáticos de turno, multiusuario ni resolución de conflictos de sincronización.
 
 ## Requisitos
 
@@ -50,6 +55,7 @@ Todavía no incluye: turnos, catálogo, ventas, caja, reportes avanzados, protoc
    - `supabase/migrations/202610230001_stage0.sql`: crea `clinics`, `clinic_members`, `pets`, `sync_operations` y `audit_log`; crea `bootstrap_clinic` y `apply_pet_operation`; crea el bucket público `mascotas` y sus políticas.
    - `supabase/migrations/202610240001_stage2.sql`: crea `clients`, agrega `client_id` y `status` a `pets`, crea `apply_client_operation` y actualiza `apply_pet_operation`.
    - `supabase/migrations/202610240002_stage3.sql`: crea `consultations`, `consultation_addenda` y `vaccinations`; crea `apply_consultation_operation`, `apply_addendum_operation` y `apply_vaccination_operation`.
+   - `supabase/migrations/202610240003_stage4.sql`: crea `appointments` y `apply_appointment_operation`, con RLS y auditoría.
 3. En **Authentication > Users**, crear el usuario de la veterinaria con email y contraseña.
 4. Copiar la URL del proyecto y la **publishable/anon key** desde **Project Settings > API**.
 5. Completar `local.properties`:
@@ -78,9 +84,9 @@ Sin `SUPABASE_URL` y `SUPABASE_ANON_KEY`, la app arranca en **modo local**: Room
 
 1. Primer inicio de sesión online.
 2. `bootstrap_clinic` devuelve la clínica del usuario.
-3. Al guardar un cliente, una mascota, una consulta, un addendum o una vacunación, se escriben la fila, su outbox y el evento de auditoría en la misma transacción de Room.
-4. Se intenta el push inmediato; se envían clientes, mascotas, consultas, addenda y vacunaciones en ese orden para respetar los vínculos. Si no hay red, WorkManager lo reintenta al reconectar.
-5. El pull trae clientes, mascotas, consultas, addenda y vacunaciones de la clínica al abrir, al reconectar y manualmente.
+3. Al guardar un cliente, una mascota, una consulta, un addendum, una vacunación o un turno, se escriben la fila, su outbox y el evento de auditoría en la misma transacción de Room.
+4. Se intenta el push inmediato; se envían clientes, mascotas, consultas, addenda, turnos y vacunaciones en ese orden para respetar los vínculos. Si no hay red, WorkManager lo reintenta al reconectar.
+5. El pull trae clientes, mascotas, consultas, addenda, vacunaciones y turnos de la clínica al abrir, al reconectar y manualmente.
 6. La foto se comprime antes de subir y solo se permite con conexión. Se guarda únicamente la URL pública en `foto_url`.
 
 ## Clientes y mascotas
@@ -106,6 +112,18 @@ La ficha de la mascota tiene tres pestañas: **Resumen**, **Historia** y **Vacun
 
 Las notificaciones locales se programan una vez por día con WorkManager y también se recalculan al abrir la app. Se avisa a 30 días, a 7 días y al vencer, una sola vez por dosis y umbral. En Android 13 o superior hay que conceder el permiso de notificaciones; Inicio muestra un botón para activarlo. Si el sistema suspendió la app o denegó el permiso, los vencimientos siguen visibles en el dashboard.
 
+## Turnos y calendario
+
+La pestaña **Turnos** tiene tres vistas: **Mes**, **Semana** y **Día**.
+
+- **Nuevo turno**: se elige una mascota activa, fecha, hora de inicio, duración, motivo y notas. La duración predeterminada se configura en Ajustes y se puede cambiar en cada turno.
+- **Estados**: programado, confirmado, atendido, cancelado y ausente. Solo los turnos programados o confirmados se editan.
+- **Superposiciones**: si otro turno se cruza en el horario, la app muestra el conflicto y pide confirmación antes de guardar.
+- **Horario del local**: en **Ajustes > Agenda** se define la apertura y el cierre de cada día y la duración predeterminada. Un turno fuera de horario también pide confirmación.
+- **Atender**: abre una consulta con la fecha y el motivo precargados. Al guardar, la consulta queda en la historia clínica y el turno pasa a atendido con el vínculo guardado.
+- **WhatsApp**: desde el detalle del turno se abre un mensaje prearmado al propietario con mascota, fecha, hora y motivo. Requiere que el cliente tenga teléfono.
+- **Inicio**: muestra la cantidad de turnos del día, el próximo turno y un acceso a la agenda.
+
 ## Bloqueo de la app
 
 En **Ajustes > Seguridad**:
@@ -128,6 +146,8 @@ Se registran eventos críticos en la tabla `audit_log` del dispositivo:
 - Cambios de propietario, con propietario anterior y nuevo.
 - Alta de consultas y addenda clínicos.
 - Alta y reprogramación de vacunaciones.
+- Alta, edición, confirmación, cancelación, ausencia y atención de turnos.
+- Cambios de horario de atención y duración predeterminada.
 - Exportación y restauración de backups.
 - Configuración, cambio y baja del PIN.
 - Activación y desactivación de la biometría.
@@ -143,7 +163,7 @@ En **Ajustes > Backup**:
 3. **Restaurar** pide la misma frase y reemplaza los datos locales con el contenido del backup.
 4. La app muestra un recordatorio si pasaron más de 7 días desde el último backup.
 
-El backup incluye clientes, mascotas, historial de propietario, consultas, addenda, vacunaciones, avisos ya emitidos, outbox y auditoría, no fotos. La frase no se guarda en el dispositivo: si se pierde, el backup no se puede recuperar. El archivo se verifica con cabecera `VBK1` y cifrado AES-256-GCM; una frase incorrecta falla sin exponer datos. Los backups de la versión anterior (sin historia clínica) se pueden restaurar y sus tablas nuevas quedan vacías.
+El backup incluye clientes, mascotas, historial de propietario, consultas, addenda, vacunaciones, avisos ya emitidos, turnos, outbox y auditoría, no fotos. La frase no se guarda en el dispositivo: si se pierde, el backup no se puede recuperar. El archivo se verifica con cabecera `VBK1` y cifrado AES-256-GCM; una frase incorrecta falla sin exponer datos. Los backups de versiones anteriores (sin historia clínica o sin turnos) se pueden restaurar y sus tablas nuevas quedan vacías.
 
 Restaurar exige iniciar sesión con la misma cuenta y clínica: el backup se rechaza si pertenece a otra clínica. No restaura el PIN ni la configuración del dispositivo. En un equipo nuevo, primero hay que iniciar sesión y después restaurar.
 
@@ -164,6 +184,10 @@ La app está pensada para usarse principalmente en un Galaxy S24 FE (Android 14 
 - Registrar consultas con todos sus campos y agregar un addendum; verificar que la consulta original no cambia.
 - Registrar vacunas a 6 y 12 meses, una fecha manual y sin próximo aviso; comprobar el estado y la próxima fecha.
 - Aplicar la dosis siguiente y reprogramar una vacuna verificando la auditoría y el dashboard.
+- Crear turnos en las vistas mensual, semanal y diaria; comprobar estados, superposiciones y horarios fuera de atención con confirmación.
+- Configurar el horario del local y la duración predeterminada en Ajustes.
+- Atender un turno y verificar que la consulta queda en la historia clínica y el turno vinculado.
+- Abrir el recordatorio de WhatsApp y comprobar el mensaje prearmado.
 - Conceder el permiso de notificaciones y comprobar los avisos a 30 días, a 7 días y de vacuna vencida con la app cerrada.
 - Desactivar o marcar como fallecida a una mascota y verificar que desaparecen sus alertas y no se vuelven a notificar.
 - Alta de mascota con foto desde **Galería** y desde **Cámara**.
@@ -191,16 +215,17 @@ adb install -r app\build\outputs\apk\debug\app-debug.apk
 .\gradlew.bat lintDebug
 ```
 
-Las pruebas unitarias cubren el hash y la política de PIN, la normalización de teléfonos y documentos, la detección de duplicados, los estados de mascota, el cálculo de próxima dosis y estados de vacuna, el planificador de recordatorios, la validación de consultas y addenda, el mapeo de DTOs, el cálculo de dimensiones y la compresión de fotos, los mensajes de error y el cifrado del backup. Las pruebas instrumentadas cubren:
+Las pruebas unitarias cubren el hash y la política de PIN, la normalización de teléfonos y documentos, la detección de duplicados, los estados de mascota, el cálculo de próxima dosis y estados de vacuna, el planificador de recordatorios, la validación de consultas y addenda, la validación de turnos, superposiciones y horarios, el enlace de WhatsApp, el mapeo de DTOs, el cálculo de dimensiones y la compresión de fotos, los mensajes de error y el cifrado del backup. Las pruebas instrumentadas cubren:
 
 - CRUD de clientes, duplicados por teléfono o documento y bloqueo de archivado con mascotas.
 - Creación de mascotas vinculadas, cambio de estado y cambio de propietario con historial.
 - Consultas, addenda, vacunaciones, reprogramación y planificación de recordatorios con outbox y auditoría.
-- Backup cifrado de ida y vuelta con clientes, mascotas, historial, consultas, addenda, vacunaciones, outbox y auditoría.
-- Migraciones de Room de la versión 1 a la 2, de la 2 a la 3 y de la 3 a la 4.
+- Turnos con superposiciones, confirmación, cancelación, ausencia, atención y consulta vinculada.
+- Backup cifrado de ida y vuelta con clientes, mascotas, historial, consultas, addenda, vacunaciones, turnos, outbox y auditoría.
+- Migraciones de Room de la versión 1 a la 2, de la 2 a la 3, de la 3 a la 4 y de la 4 a la 5.
 - Creación, verificación, bloqueo, cambio y baja del PIN; límite de intentos y bloqueo por segundo plano.
 - Pantalla de bloqueo: PIN correcto desbloquea y PIN incorrecto mantiene el contenido oculto.
 - Escritura transaccional de mascota + outbox + auditoría.
 - Compresión real a WebP/JPEG.
 
-La suite instrumentada se ejecutó en un emulador API 37 (17 pruebas). La validación en el S24 FE físico queda pendiente.
+La suite instrumentada se ejecutó en un emulador API 37 (19 pruebas). La validación en el S24 FE físico queda pendiente.

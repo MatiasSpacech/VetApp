@@ -1,5 +1,6 @@
 package com.veterapp.backup
 
+import com.veterapp.data.local.AppointmentEntity
 import com.veterapp.data.local.AuditEntity
 import com.veterapp.data.local.ClientEntity
 import com.veterapp.data.local.ConsultationAddendumEntity
@@ -23,11 +24,12 @@ data class BackupSnapshot(
   val consultationAddenda: List<ConsultationAddendumEntity> = emptyList(),
   val vaccinations: List<VaccinationEntity> = emptyList(),
   val vaccinationNotifications: List<VaccinationNotificationEntity> = emptyList(),
+  val appointments: List<AppointmentEntity> = emptyList(),
   val outbox: List<OutboxEntity> = emptyList(),
   val audit: List<AuditEntity> = emptyList(),
 ) {
   companion object {
-    const val CURRENT_VERSION = 2
+    const val CURRENT_VERSION = 3
     const val MIN_VERSION = 1
   }
 }

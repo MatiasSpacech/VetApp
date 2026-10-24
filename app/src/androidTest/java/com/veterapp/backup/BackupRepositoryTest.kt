@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.veterapp.data.AppSettings
+import com.veterapp.data.AppointmentRepository
 import com.veterapp.data.AuditRepository
 import com.veterapp.data.ClientRepository
 import com.veterapp.data.ClinicalRepository
@@ -13,8 +14,11 @@ import com.veterapp.data.PetRepository
 import com.veterapp.data.VaccinationRepository
 import com.veterapp.data.local.VaccinationNotificationEntity
 import com.veterapp.data.local.VetDatabase
+import com.veterapp.domain.AppointmentDraft
+import com.veterapp.domain.AppointmentSaveResult
 import com.veterapp.domain.ClientDraft
 import com.veterapp.domain.ClientSaveResult
+import com.veterapp.domain.ClinicTime
 import com.veterapp.domain.ConsultationAddendumDraft
 import com.veterapp.domain.ConsultationDraft
 import com.veterapp.domain.PetDraft
@@ -46,6 +50,7 @@ class BackupRepositoryTest {
       val pets = PetRepository(database, settings, audit)
       val clinical = ClinicalRepository(database, settings, audit)
       val vaccinations = VaccinationRepository(database, settings, audit)
+      val appointments = AppointmentRepository(database, settings, audit)
       val backup = BackupRepository(context, database, settings, audit)
       val file = File(context.cacheDir, "backup-test.vbackup")
       val passphrase = "backup123"
@@ -128,6 +133,15 @@ class BackupRepositoryTest {
           notifiedAt = System.currentTimeMillis(),
         ),
       )
+      appointments.create(
+        AppointmentDraft(
+          petId = petId,
+          startsAt = ClinicTime.instantAt(LocalDate.of(2026, 10, 26).toEpochDay(), 10 * 60),
+          endsAt = ClinicTime.instantAt(LocalDate.of(2026, 10, 26).toEpochDay(), 10 * 60 + 30),
+          reason = "Control",
+          notes = null,
+        ),
+      ) as AppointmentSaveResult.Success
 
       assertEquals(2, clients.clients.first().size)
       assertEquals(1, pets.pets.first().size)
@@ -135,8 +149,10 @@ class BackupRepositoryTest {
       assertEquals(1, clinical.observeConsultations(petId).first().size)
       assertEquals(1, clinical.observeAddenda(petId).first().size)
       assertEquals(1, vaccinations.observeForPet(petId).first().size)
+      assertEquals(1, appointments.observeBetween(0L, Long.MAX_VALUE).first().size)
       assertTrue(database.auditDao().all().any { it.action == "pet.create" })
       assertTrue(database.auditDao().all().any { it.action == "client.create" })
+      assertTrue(database.auditDao().all().any { it.action == "appointment.create" })
 
       val exported = backup.export(passphrase.toCharArray(), Uri.fromFile(file))
       assertTrue(exported.isSuccess)
@@ -153,6 +169,7 @@ class BackupRepositoryTest {
       database.addendumDao().clear()
       database.vaccinationDao().clear()
       database.vaccinationNotificationDao().clear()
+      database.appointmentDao().clear()
       assertEquals(0, pets.pets.first().size)
       assertEquals(0, clients.clients.first().size)
       assertEquals(0, clinical.observeConsultations(petId).first().size)
@@ -170,9 +187,11 @@ class BackupRepositoryTest {
       assertEquals(1, clinical.observeAddenda(petId).first().size)
       assertEquals(1, vaccinations.observeForPet(petId).first().size)
       assertEquals(1, database.vaccinationNotificationDao().all().size)
-      assertEquals(7, database.outboxDao().observeCount().first())
+      assertEquals(1, appointments.observeBetween(0L, Long.MAX_VALUE).first().size)
+      assertEquals(8, database.outboxDao().observeCount().first())
       assertTrue(database.auditDao().all().any { it.action == "pet.create" })
       assertTrue(database.auditDao().all().any { it.action == "client.create" })
+      assertTrue(database.auditDao().all().any { it.action == "appointment.create" })
       assertTrue(database.auditDao().all().any { it.action == "backup.restore" })
 
       database.close()

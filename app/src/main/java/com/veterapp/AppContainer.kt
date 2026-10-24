@@ -3,6 +3,7 @@ package com.veterapp
 import android.content.Context
 import com.veterapp.backup.BackupRepository
 import com.veterapp.data.AppSettings
+import com.veterapp.data.AppointmentRepository
 import com.veterapp.data.AuditRepository
 import com.veterapp.data.AuthRepository
 import com.veterapp.data.ClientRepository
@@ -32,6 +33,7 @@ class AppContainer(context: Context) {
   val petRepository = PetRepository(database, settings, auditRepository)
   val clinicalRepository = ClinicalRepository(database, settings, auditRepository)
   val vaccinationRepository = VaccinationRepository(database, settings, auditRepository)
+  val appointmentRepository = AppointmentRepository(database, settings, auditRepository)
   val photoCompressor = PhotoCompressor(context)
   val photoRepository = PhotoRepository(clientProvider)
   val syncScheduler = SyncScheduler(context)
@@ -65,5 +67,6 @@ class AppContainer(context: Context) {
       clientRepository = clientRepository,
       clinicalRepository = clinicalRepository,
       vaccinationRepository = vaccinationRepository,
+      appointmentRepository = appointmentRepository,
     )
 }

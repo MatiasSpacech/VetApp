@@ -44,6 +44,7 @@ class BackupRepository(
               consultationAddenda = database.addendumDao().all(),
               vaccinations = database.vaccinationDao().all(),
               vaccinationNotifications = database.vaccinationNotificationDao().all(),
+              appointments = database.appointmentDao().all(),
               outbox = database.outboxDao().all(),
               audit = database.auditDao().all(),
             )
@@ -70,6 +71,7 @@ class BackupRepository(
                 put("consultation_addenda", snapshot.consultationAddenda.size)
                 put("vaccinations", snapshot.vaccinations.size)
                 put("vaccination_notifications", snapshot.vaccinationNotifications.size)
+                put("appointments", snapshot.appointments.size)
                 put("outbox", snapshot.outbox.size)
                 put("audit", snapshot.audit.size)
               },
@@ -121,6 +123,9 @@ class BackupRepository(
         require(snapshot.vaccinationNotifications.all { it.clinicId == expectedClinic }) {
           "El backup pertenece a otra clínica"
         }
+        require(snapshot.appointments.all { it.clinicId == expectedClinic }) {
+          "El backup pertenece a otra clínica"
+        }
         require(snapshot.audit.all { it.clinicId == expectedClinic }) {
           "El backup pertenece a otra clínica"
         }
@@ -135,6 +140,7 @@ class BackupRepository(
           database.addendumDao().clear()
           database.vaccinationDao().clear()
           database.vaccinationNotificationDao().clear()
+          database.appointmentDao().clear()
           database.clientDao().insertAll(snapshot.clients)
           database.petDao().insertAll(snapshot.pets)
           database.ownerHistoryDao().insertAll(snapshot.ownerHistory)
@@ -142,6 +148,7 @@ class BackupRepository(
           database.addendumDao().insertAll(snapshot.consultationAddenda)
           database.vaccinationDao().insertAll(snapshot.vaccinations)
           database.vaccinationNotificationDao().insertAll(snapshot.vaccinationNotifications)
+          database.appointmentDao().insertAll(snapshot.appointments)
           database.outboxDao().insertAll(snapshot.outbox)
           database.auditDao().insertAll(snapshot.audit)
           auditRepository.record(
@@ -157,6 +164,7 @@ class BackupRepository(
                 put("consultation_addenda", snapshot.consultationAddenda.size)
                 put("vaccinations", snapshot.vaccinations.size)
                 put("vaccination_notifications", snapshot.vaccinationNotifications.size)
+                put("appointments", snapshot.appointments.size)
                 put("outbox", snapshot.outbox.size)
                 put("audit", snapshot.audit.size)
               },

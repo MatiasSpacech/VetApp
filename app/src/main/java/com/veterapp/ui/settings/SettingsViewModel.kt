@@ -4,12 +4,39 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.veterapp.AppContainer
+import com.veterapp.domain.WeeklyHours
 import kotlinx.coroutines.launch
 
 class SettingsViewModel(private val container: AppContainer) : ViewModel() {
   val securityState = container.securityRepository.state
   val lastBackupAt = container.settings.lastBackupAtFlow
   val auditEvents = container.auditRepository.recent
+
+  fun businessHours(): WeeklyHours = container.settings.businessHours()
+
+  fun defaultDurationMinutes(): Int = container.settings.defaultDurationMinutes
+
+  fun saveAgenda(hours: WeeklyHours, defaultDurationMinutes: Int, onResult: (Result<Unit>) -> Unit) {
+    viewModelScope.launch {
+      runCatching {
+          require(defaultDurationMinutes in 5..480) { "La duración debe estar entre 5 y 480 minutos" }
+          hours.days.forEach { day ->
+            if (!day.closed) {
+              require(day.openMinute < day.closeMinute) {
+                "La apertura debe ser anterior al cierre"
+              }
+            }
+          }
+          container.settings.defaultDurationMinutes = defaultDurationMinutes
+          container.settings.setBusinessHours(hours)
+          record("settings.agenda.update")
+        }
+        .fold(
+          onSuccess = { onResult(Result.success(Unit)) },
+          onFailure = { onResult(Result.failure(it)) },
+        )
+    }
+  }
 
   fun setPin(pin: String, onResult: (Result<Unit>) -> Unit) {
     viewModelScope.launch {

@@ -39,14 +39,17 @@ import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.veterapp.domain.Appointment
 import com.veterapp.domain.Client
 import com.veterapp.domain.Pet
 import com.veterapp.domain.PetStatus
 import com.veterapp.domain.VaccinationAlert
 import com.veterapp.domain.VaccineStatus
+import com.veterapp.ui.common.AppointmentStatusChip
 import com.veterapp.ui.common.VaccineStatusChip
 import com.veterapp.ui.common.formatDateTime
 import com.veterapp.ui.common.formatEpochDay
+import com.veterapp.ui.common.formatTime
 import com.veterapp.ui.main.MainUiState
 
 @Composable
@@ -55,7 +58,9 @@ fun HomeTab(
   clients: List<Client>,
   pets: List<Pet>,
   alerts: List<VaccinationAlert>,
+  todayAppointments: List<Appointment>,
   onOpenPet: (String) -> Unit,
+  onOpenAppointments: () -> Unit,
   onRefreshReminders: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
@@ -114,6 +119,11 @@ fun HomeTab(
       )
     }
 
+    TodayAppointmentsCard(
+      appointments = todayAppointments,
+      onOpenAppointments = onOpenAppointments,
+    )
+
     VaccineAlertsCard(alerts = alerts, onOpenPet = onOpenPet)
 
     if (!notificationsEnabled) {
@@ -152,6 +162,69 @@ private fun StatCard(label: String, value: Int, color: Color, modifier: Modifier
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
+    }
+  }
+}
+
+@Composable
+private fun TodayAppointmentsCard(
+  appointments: List<Appointment>,
+  onOpenAppointments: () -> Unit,
+) {
+  Card(
+    modifier = Modifier.fillMaxWidth(),
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+  ) {
+    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+          "Turnos de hoy",
+          style = MaterialTheme.typography.titleMedium,
+          fontWeight = FontWeight.SemiBold,
+          modifier = Modifier.weight(1f),
+        )
+        Text(
+          "${appointments.size}",
+          style = MaterialTheme.typography.titleMedium,
+          color = MaterialTheme.colorScheme.primary,
+        )
+      }
+      if (appointments.isEmpty()) {
+        Text(
+          "No hay turnos agendados para hoy.",
+          style = MaterialTheme.typography.bodyMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      } else {
+        appointments.take(3).forEach { appointment ->
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+              Text(
+                "${formatTime(appointment.startsAt)} · ${appointment.petName}",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+              )
+              Text(
+                "${appointment.ownerName} · ${appointment.reason}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+              )
+            }
+            AppointmentStatusChip(appointment.status)
+          }
+        }
+        if (appointments.size > 3) {
+          Text(
+            "Y ${appointments.size - 3} turno(s) más.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+      }
+      TextButton(onClick = onOpenAppointments, modifier = Modifier.align(Alignment.End)) {
+        Text("Ver agenda")
+      }
     }
   }
 }

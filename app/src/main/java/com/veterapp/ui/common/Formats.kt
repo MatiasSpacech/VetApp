@@ -23,3 +23,11 @@ fun formatEpochDay(epochDay: Long): String =
   LocalDate.ofEpochDay(epochDay).format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
 
 fun formatConsultationDate(timestamp: Long): String = formatDate(timestamp)
+
+fun formatTime(timestamp: Long): String =
+  Instant.ofEpochMilli(timestamp)
+    .atZone(ClinicTime.zone)
+    .format(DateTimeFormatter.ofPattern("HH:mm"))
+
+fun formatTimeRange(startAt: Long, endAt: Long): String =
+  "${formatTime(startAt)}–${formatTime(endAt)}"

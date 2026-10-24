@@ -16,8 +16,9 @@ interface OutboxDao {
       "WHEN 'pet' THEN 1 " +
       "WHEN 'consultation' THEN 2 " +
       "WHEN 'consultation_addendum' THEN 3 " +
-      "WHEN 'vaccination' THEN 4 " +
-      "ELSE 5 END, " +
+      "WHEN 'appointment' THEN 4 " +
+      "WHEN 'vaccination' THEN 5 " +
+      "ELSE 6 END, " +
       "createdAt ASC LIMIT :limit",
   )
   suspend fun due(now: Long, limit: Int): List<OutboxEntity>

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -56,6 +57,7 @@ import com.veterapp.domain.PetStatus
 import com.veterapp.security.BiometricUnlock
 import com.veterapp.security.PinPolicy
 import com.veterapp.security.findFragmentActivity
+import com.veterapp.ui.common.TimeField
 import com.veterapp.ui.common.formatDateTime
 import com.veterapp.util.userMessage
 import java.time.LocalDateTime
@@ -195,6 +197,13 @@ fun SettingsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
       }
 
       item {
+        AgendaCard(
+          viewModel = viewModel,
+          onMessage = { text, isError -> showMessage(text, isError) },
+        )
+      }
+
+      item {
         BackupCard(
           lastBackupAt = lastBackupAt,
           viewModel = viewModel,
@@ -248,6 +257,109 @@ fun SettingsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
       onDismiss = { pinDialogMode = null },
       onSuccess = { message -> showMessage(message) },
     )
+  }
+}
+
+@Composable
+private fun AgendaCard(
+  viewModel: SettingsViewModel,
+  onMessage: (String, Boolean) -> Unit,
+) {
+  var hours by remember { mutableStateOf(viewModel.businessHours()) }
+  var duration by remember { mutableStateOf(viewModel.defaultDurationMinutes()) }
+  var busy by remember { mutableStateOf(false) }
+  val dayLabels = listOf("Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo")
+
+  fun updateDay(index: Int, day: com.veterapp.domain.DayHours) {
+    hours = hours.copy(days = hours.days.toMutableList().also { it[index] = day })
+  }
+
+  Card(modifier = Modifier.fillMaxWidth()) {
+    Column(
+      modifier = Modifier.padding(16.dp),
+      verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+      Text(
+        "Agenda",
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+      )
+      Text(
+        "Duración predeterminada de los turnos nuevos.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+      Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        listOf(15, 30, 45, 60, 90, 120).forEach { option ->
+          OutlinedButton(onClick = { duration = option }, enabled = !busy) {
+            Text(if (duration == option) "✓ $option" else "$option")
+          }
+        }
+      }
+      Text(
+        "Horario de atención",
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+      )
+      hours.days.forEachIndexed { index, day ->
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(dayLabels[index], modifier = Modifier.weight(1f))
+            Text(
+              if (day.closed) "Cerrado" else "Abierto",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Switch(
+              checked = !day.closed,
+              enabled = !busy,
+              onCheckedChange = { open -> updateDay(index, day.copy(closed = !open)) },
+            )
+          }
+          if (!day.closed) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+              TimeField(
+                label = "Apertura",
+                minuteOfDay = day.openMinute,
+                onChange = { updateDay(index, day.copy(openMinute = it)) },
+                enabled = !busy,
+                modifier = Modifier.weight(1f),
+              )
+              TimeField(
+                label = "Cierre",
+                minuteOfDay = day.closeMinute,
+                onChange = { updateDay(index, day.copy(closeMinute = it)) },
+                enabled = !busy,
+                modifier = Modifier.weight(1f),
+              )
+            }
+          }
+        }
+        HorizontalDivider()
+      }
+      Text(
+        "Los turnos fuera de este horario se pueden guardar con confirmación.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+      Button(
+        onClick = {
+          busy = true
+          viewModel.saveAgenda(hours, duration) { result ->
+            busy = false
+            result
+              .onSuccess { onMessage("Agenda guardada", false) }
+              .onFailure { onMessage(it.userMessage("No se pudo guardar la agenda"), true) }
+          }
+        },
+        enabled = !busy,
+      ) {
+        Text(if (busy) "Guardando…" else "Guardar agenda")
+      }
+    }
   }
 }
 
@@ -323,7 +435,7 @@ private fun BackupCard(
         fontWeight = FontWeight.SemiBold,
       )
       Text(
-        "Incluye clientes, mascotas, historial de propietario, auditoría y cambios pendientes. No incluye las fotos. La frase no se guarda: anotala.",
+        "Incluye clientes, mascotas, historial de propietario, historia clínica, vacunas, turnos, auditoría y cambios pendientes. No incluye las fotos. La frase no se guarda: anotala.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
@@ -595,6 +707,13 @@ private fun auditActionLabel(action: String): String =
     "client.create" -> "Cliente creado"
     "client.update" -> "Cliente editado"
     "client.delete" -> "Cliente archivado"
+    "appointment.create" -> "Turno creado"
+    "appointment.update" -> "Turno editado"
+    "appointment.confirm" -> "Turno confirmado"
+    "appointment.cancel" -> "Turno cancelado"
+    "appointment.no_show" -> "Turno marcado como ausente"
+    "appointment.attend" -> "Turno atendido"
+    "settings.agenda.update" -> "Agenda actualizada"
     "backup.export" -> "Backup exportado"
     "backup.restore" -> "Backup restaurado"
     "security.pin.create" -> "PIN configurado"
@@ -634,6 +753,16 @@ private fun auditDetail(event: AuditEvent): String =
       if (changed.isBlank()) "Cliente $name editado." else "Cliente $name editado. Cambios: $changed."
     }
     "client.delete" -> "Cliente ${payloadText(event, "name") ?: "sin nombre"} archivado."
+    "appointment.create" -> "Se agendó un turno."
+    "appointment.update" -> "Se editó un turno."
+    "appointment.confirm" -> "Se confirmó un turno."
+    "appointment.cancel" -> {
+      val reason = payloadText(event, "reason")
+      "Se canceló un turno.${reason?.let { " Motivo: $it." }.orEmpty()}"
+    }
+    "appointment.no_show" -> "Se marcó un turno como ausente."
+    "appointment.attend" -> "Se atendió un turno y se vinculó la consulta."
+    "settings.agenda.update" -> "Se actualizó el horario de atención."
     "backup.export" ->
       "Clientes: ${payloadInt(event, "clients") ?: 0} · Mascotas: ${payloadInt(event, "pets") ?: 0}."
     "backup.restore" ->

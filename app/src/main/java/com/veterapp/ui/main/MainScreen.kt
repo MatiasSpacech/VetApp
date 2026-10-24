@@ -34,6 +34,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.veterapp.ui.appointments.AppointmentFormDialog
+import com.veterapp.ui.appointments.AppointmentsTab
+import com.veterapp.ui.appointments.AppointmentsViewModel
 import com.veterapp.ui.clients.ClientFormDialog
 import com.veterapp.ui.clients.ClientsTab
 import com.veterapp.ui.clients.ClientsViewModel
@@ -47,6 +50,7 @@ private enum class MainTab(val label: String) {
   Home("Inicio"),
   Clients("Clientes"),
   Pets("Mascotas"),
+  Appointments("Turnos"),
 }
 
 @Composable
@@ -55,6 +59,7 @@ fun MainScreen(
   clientsViewModel: ClientsViewModel,
   petsViewModel: PetsViewModel,
   clinicalViewModel: ClinicalViewModel,
+  appointmentsViewModel: AppointmentsViewModel,
   onOpenSettings: () -> Unit,
   onOpenClient: (String) -> Unit,
   onOpenPet: (String) -> Unit,
@@ -74,6 +79,7 @@ fun MainScreen(
         clientsViewModel = clientsViewModel,
         petsViewModel = petsViewModel,
         clinicalViewModel = clinicalViewModel,
+        appointmentsViewModel = appointmentsViewModel,
         onOpenSettings = onOpenSettings,
         onOpenClient = onOpenClient,
         onOpenPet = onOpenPet,
@@ -101,7 +107,7 @@ private fun ErrorScreen(message: String) {
     Text(message, color = MaterialTheme.colorScheme.error)
     Spacer(Modifier.height(12.dp))
     Text(
-      "Revisá la configuración de Supabase y el SQL de las etapas 0, 2 y 3.",
+      "Revisá la configuración de Supabase y el SQL de las etapas 0, 2, 3 y 4.",
       style = MaterialTheme.typography.bodySmall,
     )
   }
@@ -167,6 +173,7 @@ private fun AppContent(
   clientsViewModel: ClientsViewModel,
   petsViewModel: PetsViewModel,
   clinicalViewModel: ClinicalViewModel,
+  appointmentsViewModel: AppointmentsViewModel,
   onOpenSettings: () -> Unit,
   onOpenClient: (String) -> Unit,
   onOpenPet: (String) -> Unit,
@@ -175,11 +182,13 @@ private fun AppContent(
   val clients by clientsViewModel.clients.collectAsStateWithLifecycle()
   val pets by petsViewModel.pets.collectAsStateWithLifecycle()
   val alerts by clinicalViewModel.alerts.collectAsStateWithLifecycle()
+  val todayAppointments by appointmentsViewModel.todayAppointments.collectAsStateWithLifecycle()
   var selectedTabName by rememberSaveable { mutableStateOf(MainTab.Home.name) }
   val selectedTab =
     runCatching { MainTab.valueOf(selectedTabName) }.getOrDefault(MainTab.Home)
   var showClientForm by remember { mutableStateOf(false) }
   var showPetForm by remember { mutableStateOf(false) }
+  var showAppointmentForm by remember { mutableStateOf(false) }
   val signedIn = state.auth is AuthUiState.SignedIn
 
   Scaffold(
@@ -214,6 +223,12 @@ private fun AppContent(
             icon = { Text("+", style = MaterialTheme.typography.titleLarge) },
             text = { Text("Nueva mascota") },
           )
+        MainTab.Appointments ->
+          ExtendedFloatingActionButton(
+            onClick = { showAppointmentForm = true },
+            icon = { Text("+", style = MaterialTheme.typography.titleLarge) },
+            text = { Text("Nuevo turno") },
+          )
         MainTab.Home -> Unit
       }
     },
@@ -235,7 +250,9 @@ private fun AppContent(
             clients = clients,
             pets = pets,
             alerts = alerts,
+            todayAppointments = todayAppointments,
             onOpenPet = onOpenPet,
+            onOpenAppointments = { selectedTabName = MainTab.Appointments.name },
             onRefreshReminders = clinicalViewModel::refreshReminders,
             modifier = Modifier.weight(1f),
           )
@@ -253,6 +270,14 @@ private fun AppContent(
             hasClients = clients.isNotEmpty(),
             onOpenPet = onOpenPet,
             onNewPet = { showPetForm = true },
+            modifier = Modifier.weight(1f),
+          )
+        MainTab.Appointments ->
+          AppointmentsTab(
+            appointmentsViewModel = appointmentsViewModel,
+            pets = pets,
+            onOpenPet = onOpenPet,
+            onNewAppointment = { showAppointmentForm = true },
             modifier = Modifier.weight(1f),
           )
       }
@@ -291,6 +316,18 @@ private fun AppContent(
         selectedTabName = MainTab.Clients.name
         showClientForm = true
       },
+    )
+  }
+
+  if (showAppointmentForm) {
+    AppointmentFormDialog(
+      appointment = null,
+      pets = pets,
+      defaultDurationMinutes = appointmentsViewModel.defaultDurationMinutes(),
+      onSave = { draft, force, onResult ->
+        appointmentsViewModel.create(draft, force, onResult)
+      },
+      onDismiss = { showAppointmentForm = false },
     )
   }
 }

@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
+import com.veterapp.ui.appointments.AppointmentsViewModel
 import com.veterapp.ui.clients.ClientDetailScreen
 import com.veterapp.ui.clients.ClientsViewModel
 import com.veterapp.ui.clinical.ClinicalViewModel
@@ -25,6 +26,7 @@ fun MainNavigation() {
   val clientsViewModel: ClientsViewModel = viewModel { ClientsViewModel(app.container) }
   val petsViewModel: PetsViewModel = viewModel { PetsViewModel(app.container) }
   val clinicalViewModel: ClinicalViewModel = viewModel { ClinicalViewModel(app.container) }
+  val appointmentsViewModel: AppointmentsViewModel = viewModel { AppointmentsViewModel(app.container) }
   val backStack = rememberNavBackStack(Main)
 
   NavDisplay(
@@ -38,6 +40,7 @@ fun MainNavigation() {
             clientsViewModel = clientsViewModel,
             petsViewModel = petsViewModel,
             clinicalViewModel = clinicalViewModel,
+            appointmentsViewModel = appointmentsViewModel,
             onOpenSettings = { backStack.add(Settings) },
             onOpenClient = { backStack.add(ClientDetail(it)) },
             onOpenPet = { backStack.add(PetDetail(it)) },

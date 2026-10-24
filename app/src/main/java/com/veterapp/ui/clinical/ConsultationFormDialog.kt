@@ -29,13 +29,23 @@ import com.veterapp.domain.ConsultationDraft
 import com.veterapp.ui.common.DateField
 import com.veterapp.util.userMessage
 
+data class ConsultationPrefill(
+  val consultedOn: Long,
+  val reason: String,
+)
+
 @Composable
 fun ConsultationFormDialog(
+  prefill: ConsultationPrefill? = null,
   onSave: (ConsultationDraft, (Result<Unit>) -> Unit) -> Unit,
   onDismiss: () -> Unit,
 ) {
-  var consultedOn by rememberSaveable { mutableStateOf(ClinicTime.todayEpochDay()) }
-  var reason by rememberSaveable { mutableStateOf("") }
+  var consultedOn by rememberSaveable(prefill?.consultedOn) {
+    mutableStateOf(prefill?.consultedOn ?: ClinicTime.todayEpochDay())
+  }
+  var reason by rememberSaveable(prefill?.reason) {
+    mutableStateOf(prefill?.reason.orEmpty())
+  }
   var exam by rememberSaveable { mutableStateOf("") }
   var diagnosis by rememberSaveable { mutableStateOf("") }
   var treatment by rememberSaveable { mutableStateOf("") }

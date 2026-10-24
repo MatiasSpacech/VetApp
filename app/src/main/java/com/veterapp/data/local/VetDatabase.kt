@@ -18,8 +18,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     ConsultationAddendumEntity::class,
     VaccinationEntity::class,
     VaccinationNotificationEntity::class,
+    AppointmentEntity::class,
   ],
-  version = 4,
+  version = 5,
   exportSchema = true,
 )
 abstract class VetDatabase : RoomDatabase() {
@@ -40,6 +41,8 @@ abstract class VetDatabase : RoomDatabase() {
   abstract fun vaccinationDao(): VaccinationDao
 
   abstract fun vaccinationNotificationDao(): VaccinationNotificationDao
+
+  abstract fun appointmentDao(): AppointmentDao
 
   companion object {
     val MIGRATION_1_2 =
@@ -251,9 +254,50 @@ abstract class VetDatabase : RoomDatabase() {
         }
       }
 
+    val MIGRATION_4_5 =
+      object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+          db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `appointments` (" +
+              "`id` TEXT NOT NULL, " +
+              "`clinicId` TEXT NOT NULL, " +
+              "`petId` TEXT NOT NULL, " +
+              "`startsAt` INTEGER NOT NULL, " +
+              "`endsAt` INTEGER NOT NULL, " +
+              "`status` TEXT NOT NULL, " +
+              "`reason` TEXT NOT NULL, " +
+              "`notes` TEXT, " +
+              "`consultationId` TEXT, " +
+              "`cancelReason` TEXT, " +
+              "`createdAt` INTEGER NOT NULL, " +
+              "`updatedAt` INTEGER NOT NULL, " +
+              "`revision` INTEGER NOT NULL, " +
+              "`deletedAt` INTEGER, " +
+              "`originDeviceId` TEXT NOT NULL, " +
+              "`pendingSync` INTEGER NOT NULL, " +
+              "PRIMARY KEY(`id`))",
+          )
+          db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_appointments_clinicId` ON `appointments` (`clinicId`)",
+          )
+          db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_appointments_petId` ON `appointments` (`petId`)",
+          )
+          db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_appointments_startsAt` ON `appointments` (`startsAt`)",
+          )
+          db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_appointments_status` ON `appointments` (`status`)",
+          )
+          db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_appointments_pendingSync` ON `appointments` (`pendingSync`)",
+          )
+        }
+      }
+
     fun build(context: Context): VetDatabase =
       Room.databaseBuilder(context, VetDatabase::class.java, "veterapp.db")
-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
         .build()
   }
 }

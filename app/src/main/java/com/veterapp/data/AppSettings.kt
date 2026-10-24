@@ -1,13 +1,18 @@
 package com.veterapp.data
 
 import android.content.Context
+import com.veterapp.domain.WeeklyHours
 import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 class AppSettings(context: Context) {
   private val preferences = context.getSharedPreferences("veterapp_settings", Context.MODE_PRIVATE)
+  private val json = Json { ignoreUnknownKeys = true }
   private val _lastBackupAt = MutableStateFlow(preferences.getLong(KEY_LAST_BACKUP_AT, 0L))
 
   val lastBackupAtFlow: StateFlow<Long> = _lastBackupAt.asStateFlow()
@@ -70,6 +75,22 @@ class AppSettings(context: Context) {
       preferences.edit().putBoolean(KEY_BIOMETRIC_ENABLED, value).apply()
     }
 
+  var defaultDurationMinutes: Int
+    get() = preferences.getInt(KEY_DEFAULT_DURATION, DEFAULT_DURATION_MINUTES)
+    set(value) {
+      preferences.edit().putInt(KEY_DEFAULT_DURATION, value).apply()
+    }
+
+  fun businessHours(): WeeklyHours {
+    val stored = preferences.getString(KEY_BUSINESS_HOURS, null) ?: return WeeklyHours()
+    return runCatching { json.decodeFromString<WeeklyHours>(stored) }
+      .getOrDefault(WeeklyHours())
+  }
+
+  fun setBusinessHours(hours: WeeklyHours) {
+    preferences.edit().putString(KEY_BUSINESS_HOURS, json.encodeToString(hours)).apply()
+  }
+
   val hasPin: Boolean
     get() = pinHash != null
 
@@ -83,5 +104,8 @@ class AppSettings(context: Context) {
     const val KEY_PIN_HASH = "pin_hash"
     const val KEY_PIN_LENGTH = "pin_length"
     const val KEY_BIOMETRIC_ENABLED = "biometric_enabled"
+    const val KEY_DEFAULT_DURATION = "default_duration_minutes"
+    const val KEY_BUSINESS_HOURS = "business_hours"
+    const val DEFAULT_DURATION_MINUTES = 30
   }
 }

@@ -1,6 +1,7 @@
 package com.veterapp.sync
 
 import com.veterapp.data.AppSettings
+import com.veterapp.data.AppointmentRepository
 import com.veterapp.data.AuthRepository
 import com.veterapp.data.ClientRepository
 import com.veterapp.data.ClinicalRepository
@@ -8,6 +9,7 @@ import com.veterapp.data.PetRepository
 import com.veterapp.data.VaccinationRepository
 import com.veterapp.data.local.OutboxEntity
 import com.veterapp.data.local.VetDatabase
+import com.veterapp.data.remote.AppointmentDto
 import com.veterapp.data.remote.ClientDto
 import com.veterapp.data.remote.ConsultationAddendumDto
 import com.veterapp.data.remote.ConsultationDto
@@ -35,6 +37,7 @@ class SyncRepository(
   private val clientRepository: ClientRepository,
   private val clinicalRepository: ClinicalRepository,
   private val vaccinationRepository: VaccinationRepository,
+  private val appointmentRepository: AppointmentRepository,
 ) {
   private val outboxDao = database.outboxDao()
   private val json = Json { ignoreUnknownKeys = true }
@@ -58,6 +61,7 @@ class SyncRepository(
       pullConsultations(clinicId)
       pullAddenda(clinicId)
       pullVaccinations(clinicId)
+      pullAppointments(clinicId)
       val now = System.currentTimeMillis()
       settings.lastSyncAt = now
       _lastSyncAt.value = now
@@ -80,6 +84,7 @@ class SyncRepository(
           "consultation" -> applyConsultationOperation(item, clinicId)
           "consultation_addendum" -> applyAddendumOperation(item, clinicId)
           "vaccination" -> applyVaccinationOperation(item, clinicId)
+          "appointment" -> applyAppointmentOperation(item, clinicId)
           else -> error("Entidad de sincronización desconocida: ${item.entityType}")
         }
         outboxDao.delete(item.operationId)
@@ -193,6 +198,25 @@ class SyncRepository(
     vaccinationRepository.markSynced(saved, clinicId)
   }
 
+  private suspend fun applyAppointmentOperation(item: OutboxEntity, clinicId: String) {
+    val client = clientProvider.client ?: error("Supabase no está configurado")
+    val payload = json.parseToJsonElement(item.payload).jsonObject
+    val parameters =
+      buildJsonObject {
+        put("p_operation_id", item.operationId)
+        put("p_clinic_id", clinicId)
+        put("p_device_id", settings.deviceId)
+        put("p_appointment", payload)
+      }
+
+    val rows =
+      client.postgrest
+        .rpc("apply_appointment_operation", parameters)
+        .decodeList<AppointmentDto>()
+    val saved = rows.firstOrNull() ?: error("El servidor no devolvió el turno")
+    appointmentRepository.markSynced(saved, clinicId)
+  }
+
   private suspend fun pullClients(clinicId: String) {
     val client = clientProvider.client ?: error("Supabase no está configurado")
     val rows =
@@ -251,6 +275,18 @@ class SyncRepository(
         }
         .decodeList<VaccinationDto>()
     rows.forEach { vaccinationRepository.upsertFromRemote(it, clinicId) }
+  }
+
+  private suspend fun pullAppointments(clinicId: String) {
+    val client = clientProvider.client ?: error("Supabase no está configurado")
+    val rows =
+      client.postgrest
+        .from("appointments")
+        .select {
+          filter { eq("clinic_id", clinicId) }
+        }
+        .decodeList<AppointmentDto>()
+    rows.forEach { appointmentRepository.upsertFromRemote(it, clinicId) }
   }
 
   sealed interface SyncResult {
